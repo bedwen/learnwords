@@ -4,19 +4,24 @@ Aditionally, this website was created using AI tools to help me learn to code wi
 
 **Dashboard**
 The homepage displays word counts and “Start Studying” buttons.
-![Dashboard (Main Page)](imagesforreadme/LWmainpage.png)
+![Dashboard Page (Main Page)](imagesforreadme/LWmainpage.png)
 
 **Words**
 The Words page displays the words we have added and an “Add Word” button.
-![[LWwords.jpg]]
+![Words Page](imagesforreadme/LWwords.jpg)
 
 **Add Word**
 In the word addition module, we can add the word itself, its meaning, CEFR level, part of speech, an example sentence, and its translation.
-![[LWaddword.png]]
+![Add Word Page](imagesforreadme/LWaddword.png)
+
+**Study**
+On the Study page, the flashcards display the word itself on the front and its meanings on the back. This allows users to practice memorizing vocabulary.
+![Study Page](imagesforreadme/LWstudypage.png)
 
 **Statistics**
 On the Statistics page, we can view statistics such as the number of words, CEFR level distribution, learning status, total views, total number of correct and incorrect answers, and accuracy rate.
-![[LWstatistics.png]]
+![Statistics](imagesforreadme/LWstatistics.png)
+
 
 
 # **Installation**
