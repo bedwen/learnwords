@@ -30,6 +30,7 @@ On the Statistics page, we can view statistics such as the number of words, CEFR
 
 **Installation**
 Clone repository:
+- `git clone https://github.com/bedwen/learnwords`
 - `cd learnwords`
 Install to packages:
 - `npm install`
