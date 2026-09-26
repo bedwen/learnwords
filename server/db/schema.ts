@@ -49,6 +49,24 @@ export function initializeSchema(db: Database.Database): void {
       FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
     );
 
+    -- Folders table: stores named, colored word groups
+    CREATE TABLE IF NOT EXISTS folders (
+      id         TEXT PRIMARY KEY,
+      name       TEXT NOT NULL,
+      color      TEXT NOT NULL DEFAULT '#94a3b8',
+      created_at DATETIME NOT NULL DEFAULT (datetime('now')),
+      updated_at DATETIME NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Word-folder junction table: many-to-many relationship
+    CREATE TABLE IF NOT EXISTS word_folders (
+      word_id   TEXT NOT NULL,
+      folder_id TEXT NOT NULL,
+      PRIMARY KEY (word_id, folder_id),
+      FOREIGN KEY (word_id)   REFERENCES words(id)   ON DELETE CASCADE,
+      FOREIGN KEY (folder_id) REFERENCES folders(id)  ON DELETE CASCADE
+    );
+
     -- Indexes as specified in docs/database.md
     CREATE INDEX IF NOT EXISTS idx_words_word              ON words(word);
     CREATE INDEX IF NOT EXISTS idx_words_level             ON words(level);
@@ -57,5 +75,9 @@ export function initializeSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_learning_states_mastery      ON learning_states(mastery);
     CREATE INDEX IF NOT EXISTS idx_review_history_word_id       ON review_history(word_id);
     CREATE INDEX IF NOT EXISTS idx_review_history_reviewed_at   ON review_history(reviewed_at);
+
+    -- Folder indexes
+    CREATE INDEX IF NOT EXISTS idx_word_folders_word_id   ON word_folders(word_id);
+    CREATE INDEX IF NOT EXISTS idx_word_folders_folder_id ON word_folders(folder_id);
   `);
 }

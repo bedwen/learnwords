@@ -8,6 +8,7 @@ export async function getWords(params?: {
   status?: string;
   sortBy?: string;
   order?: string;
+  folderId?: string;
 }): Promise<WordWithState[]> {
   const url = new URL(API_BASE, window.location.origin);
   if (params) {
@@ -17,6 +18,12 @@ export async function getWords(params?: {
   }
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error('Failed to fetch words');
+  return res.json();
+}
+
+export async function getWordById(id: string): Promise<WordWithState> {
+  const res = await fetch(`${API_BASE}/${id}`);
+  if (!res.ok) throw new Error('Failed to fetch word');
   return res.json();
 }
 
@@ -43,4 +50,9 @@ export async function updateWord(id: string, data: UpdateWordDto): Promise<WordW
 export async function deleteWord(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete word');
+}
+
+export async function removeWordFromFolder(wordId: string, folderId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/${wordId}/folders/${folderId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error('Failed to remove word from folder');
 }

@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid';
 import { getDatabase } from '../db';
 import { WordWithState, CreateWordDto, UpdateWordDto } from '../../src/types';
+import { FolderService } from './folders';
 
 export class WordService {
   /**
@@ -13,6 +14,7 @@ export class WordService {
     status?: string; // e.g. "New", "Learning", "Familiar", "Strong", "Mastered"
     sortBy?: 'created_at' | 'word';
     order?: 'asc' | 'desc';
+    folderId?: string; // Filter by folder ID, or 'ungrouped' for words with no folders
   }): WordWithState[] {
     const db = getDatabase();
     
@@ -31,10 +33,20 @@ export class WordService {
         ls.consecutive_correct as ls_consecutive_correct
       FROM words w
       LEFT JOIN learning_states ls ON w.id = ls.word_id
-      WHERE 1=1
     `;
     
     const params: any[] = [];
+
+    // Folder filtering
+    if (options?.folderId === 'ungrouped') {
+      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id)`;
+    } else if (options?.folderId) {
+      query += ` JOIN word_folders wf ON w.id = wf.word_id AND wf.folder_id = ?`;
+      params.push(options.folderId);
+      query += ` WHERE 1=1`;
+    } else {
+      query += ` WHERE 1=1`;
+    }
 
     if (options?.search) {
       query += ` AND (w.word LIKE ? OR w.meaning LIKE ?)`;
@@ -73,9 +85,9 @@ export class WordService {
   }
 
   /**
-   * Get a single word by ID
+   * Get a single word by ID, including folder IDs
    */
-  static getWordById(id: string): WordWithState | null {
+  static getWordById(id: string): (WordWithState & { folderIds: string[] }) | null {
     const db = getDatabase();
     const query = `
       SELECT 
@@ -98,13 +110,16 @@ export class WordService {
     const row = db.prepare(query).get(id) as any;
     if (!row) return null;
     
-    return this.mapRowToWordWithState(row);
+    const word = this.mapRowToWordWithState(row);
+    const folderIds = FolderService.getWordFolderIds(id);
+    return { ...word, folderIds };
   }
 
   /**
    * Create a new word and its initial learning state.
+   * Optionally associates the word with folders.
    */
-  static createWord(data: CreateWordDto): WordWithState {
+  static createWord(data: CreateWordDto): WordWithState & { folderIds: string[] } {
     const db = getDatabase();
     const wordId = nanoid();
     const stateId = nanoid();
@@ -135,6 +150,11 @@ export class WordService {
         now
       );
       insertState.run(stateId, wordId, now);
+
+      // Set folder associations if provided
+      if (data.folderIds && data.folderIds.length > 0) {
+        FolderService.setWordFolders(wordId, data.folderIds);
+      }
     });
 
     transaction();
@@ -145,7 +165,7 @@ export class WordService {
   /**
    * Update an existing word
    */
-  static updateWord(id: string, data: UpdateWordDto): WordWithState | null {
+  static updateWord(id: string, data: UpdateWordDto): (WordWithState & { folderIds: string[] }) | null {
     const db = getDatabase();
     
     // Check if word exists
@@ -192,6 +212,11 @@ export class WordService {
       
       const query = `UPDATE words SET ${updates.join(', ')} WHERE id = ?`;
       db.prepare(query).run(...params);
+    }
+
+    // Update folder associations if provided
+    if (data.folderIds !== undefined) {
+      FolderService.setWordFolders(id, data.folderIds);
     }
 
     return this.getWordById(id);

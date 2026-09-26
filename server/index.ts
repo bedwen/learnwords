@@ -5,6 +5,7 @@ import { getDatabase, initializeSchema, closeDatabase } from './db';
 import wordsRouter from './routes/words';
 import studyRouter from './routes/study';
 import dashboardRouter from './routes/dashboard';
+import foldersRouter from './routes/folders';
 
 const app = express();
 const PORT = 3001;
@@ -15,6 +16,7 @@ app.use(express.json());
 app.use('/api/words', wordsRouter);
 app.use('/api/study', studyRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/folders', foldersRouter);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

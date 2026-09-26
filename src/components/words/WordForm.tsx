@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
-import { WordWithState, CEFRLevel } from '../../types';
+import { WordWithState, CEFRLevel, Folder } from '../../types';
+import { getFolders } from '../../api/folders';
 
 interface WordFormProps {
   initialData?: WordWithState;
   onSubmit: (data: any) => Promise<void>;
   onCancel: () => void;
+  preSelectedFolderIds?: string[];
 }
 
-export function WordForm({ initialData, onSubmit, onCancel }: WordFormProps) {
+export function WordForm({ initialData, onSubmit, onCancel, preSelectedFolderIds }: WordFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +23,26 @@ export function WordForm({ initialData, onSubmit, onCancel }: WordFormProps) {
   const [exampleSentence, setExampleSentence] = useState(initialData?.example_sentence || '');
   const [exampleTranslation, setExampleTranslation] = useState(initialData?.example_translation || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
+
+  // Folder selection
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>(
+    initialData?.folderIds || preSelectedFolderIds || []
+  );
+
+  useEffect(() => {
+    getFolders()
+      .then(data => setFolders(data.folders))
+      .catch(console.error);
+  }, []);
+
+  const toggleFolder = (folderId: string) => {
+    setSelectedFolderIds(prev =>
+      prev.includes(folderId)
+        ? prev.filter(id => id !== folderId)
+        : [...prev, folderId]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +58,7 @@ export function WordForm({ initialData, onSubmit, onCancel }: WordFormProps) {
         example_sentence: exampleSentence || null,
         example_translation: exampleTranslation || null,
         notes: notes || null,
+        folderIds: selectedFolderIds,
       };
       await onSubmit(payload);
     } catch (err: any) {
@@ -114,6 +137,37 @@ export function WordForm({ initialData, onSubmit, onCancel }: WordFormProps) {
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
       />
+
+      {/* Folder selection */}
+      {folders.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <label className="text-sm font-medium text-surface-700">Folders</label>
+          <div className="flex flex-wrap gap-2">
+            {folders.map((folder) => {
+              const isSelected = selectedFolderIds.includes(folder.id);
+              return (
+                <button
+                  key={folder.id}
+                  type="button"
+                  onClick={() => toggleFolder(folder.id)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
+                    isSelected
+                      ? 'border-surface-900 bg-surface-900 text-white'
+                      : 'border-surface-200 bg-white text-surface-600 hover:border-surface-300'
+                  }`}
+                >
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: isSelected ? '#fff' : folder.color }}
+                  />
+                  {folder.name}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-surface-400 mt-0.5">Click to toggle folder membership</p>
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-surface-100">
         <Button type="button" variant="secondary" onClick={onCancel}>

@@ -3,6 +3,7 @@ import { getDatabase } from '../db';
 import { WordWithState, ReviewRating } from '../../src/types';
 import { LearningEngine } from './learningEngine';
 import { WordService } from './words'; // Reusing for fetching WordWithState
+import { FolderService } from './folders';
 
 export class StudyService {
   /**
@@ -10,14 +11,14 @@ export class StudyService {
    * Priority:
    * 1. Due reviews (next_review <= now)
    * 2. New words (mastery = 0)
+   * 
+   * Optionally filtered by folder ID.
    */
-  static getStudyQueue(limit = 50): WordWithState[] {
+  static getStudyQueue(limit = 50, folderId?: string): WordWithState[] {
     const db = getDatabase();
     const now = new Date().toISOString();
 
-    // SQLite doesn't natively support full ISO date parsing easily for comparison without date(), 
-    // but ISO strings sort lexicographically perfectly!
-    const query = `
+    let query = `
       SELECT 
         w.*,
         ls.id as ls_id,
@@ -32,18 +33,34 @@ export class StudyService {
         ls.consecutive_correct as ls_consecutive_correct
       FROM learning_states ls
       JOIN words w ON w.id = ls.word_id
-      WHERE ls.next_review <= ? OR ls.mastery = 0
+    `;
+
+    const params: any[] = [];
+
+    if (folderId === 'ungrouped') {
+      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id)`;
+      query += ` AND (ls.next_review <= ? OR ls.mastery = 0)`;
+      params.push(now);
+    } else if (folderId) {
+      query += ` JOIN word_folders wf ON w.id = wf.word_id AND wf.folder_id = ?`;
+      params.push(folderId);
+      query += ` WHERE (ls.next_review <= ? OR ls.mastery = 0)`;
+      params.push(now);
+    } else {
+      query += ` WHERE (ls.next_review <= ? OR ls.mastery = 0)`;
+      params.push(now);
+    }
+
+    query += `
       ORDER BY 
         CASE WHEN ls.mastery = 0 THEN 1 ELSE 0 END, -- Prioritize due reviews over new words
         ls.next_review ASC
       LIMIT ?
     `;
+    params.push(limit);
 
-    const rows = db.prepare(query).all(now, limit) as any[];
+    const rows = db.prepare(query).all(...params) as any[];
 
-    // Re-use mapping from WordService
-    // WordService's mapRowToWordWithState is private, so let's duplicate or make public.
-    // For now, let's map it here.
     return rows.map(row => ({
       id: row.id,
       word: row.word,
@@ -66,7 +83,8 @@ export class StudyService {
         correct_count: row.ls_correct_count,
         wrong_count: row.ls_wrong_count,
         consecutive_correct: row.ls_consecutive_correct
-      }
+      },
+      folderIds: FolderService.getWordFolderIds(row.id),
     }));
   }
 

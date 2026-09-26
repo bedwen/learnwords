@@ -1,10 +1,15 @@
-import { useEffect, useState, useCallback } from 'react';
-import { WordWithState, ReviewRating } from '../types';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { WordWithState, ReviewRating, Folder } from '../types';
 import { getStudyQueue, submitReview } from '../api/study';
+import { getFolders } from '../api/folders';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 
-export function Study() {
+interface StudyProps {
+  folderId?: string;
+}
+
+export function Study({ folderId: initialFolderId }: StudyProps) {
   const [queue, setQueue] = useState<WordWithState[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -15,10 +20,34 @@ export function Study() {
   // When true, disables CSS transition so the card flips instantly (no animation)
   const [isTransitioning, setIsTransitioning] = useState(false);
 
+  // Folder filtering
+  const [activeFolderId, setActiveFolderId] = useState<string | undefined>(initialFolderId);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folderSwitcherOpen, setFolderSwitcherOpen] = useState(false);
+  const switcherRef = useRef<HTMLDivElement>(null);
+
+  // Load folders for the switcher and for word labels
+  useEffect(() => {
+    getFolders()
+      .then(data => setFolders(data.folders))
+      .catch(console.error);
+  }, []);
+
+  // Close switcher on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (switcherRef.current && !switcherRef.current.contains(e.target as Node)) {
+        setFolderSwitcherOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
   const fetchQueue = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getStudyQueue();
+      const data = await getStudyQueue(activeFolderId);
       setQueue(data);
       setError(null);
     } catch (err) {
@@ -26,7 +55,7 @@ export function Study() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeFolderId]);
 
   useEffect(() => {
     fetchQueue();
@@ -88,6 +117,29 @@ export function Study() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isRevealed, queue.length, loading, submitting, handleRating]);
 
+  // Get folder names for the current word
+  const getWordFolderLabels = (word: WordWithState): string => {
+    if (!word.folderIds || word.folderIds.length === 0) {
+      return 'Ungrouped';
+    }
+    return word.folderIds
+      .map(id => folders.find(f => f.id === id)?.name || 'Unknown')
+      .join(', ');
+  };
+
+  // Get active folder name for display
+  const getActiveFolderName = (): string => {
+    if (!activeFolderId) return 'All Words';
+    if (activeFolderId === 'ungrouped') return 'Ungrouped';
+    return folders.find(f => f.id === activeFolderId)?.name || 'Folder';
+  };
+
+  const handleFolderSwitch = (fId: string | undefined) => {
+    setActiveFolderId(fId);
+    setFolderSwitcherOpen(false);
+    setIsRevealed(false);
+  };
+
   if (loading && queue.length === 0) {
     return <div className="py-20 text-center text-surface-500">Loading...</div>;
   }
@@ -102,13 +154,14 @@ export function Study() {
   }
 
   if (queue.length === 0) {
+    const emptyMessage = activeFolderId
+      ? `No words to study in ${getActiveFolderName()} right now.`
+      : "Great! You've finished all words due for review right now. You can add new words or come back later.";
+    
     return (
       <div className="py-32 flex flex-col items-center justify-center text-center">
         <h2 className="text-2xl font-semibold text-surface-900 mb-2">No Words to Study</h2>
-        <p className="text-surface-500 mb-6 max-w-md">
-          Great! You've finished all words due for review right now.
-          You can add new words or come back later.
-        </p>
+        <p className="text-surface-500 mb-6 max-w-md">{emptyMessage}</p>
         <Button onClick={fetchQueue}>Refresh</Button>
       </div>
     );
@@ -124,11 +177,17 @@ export function Study() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-100px)] py-8">
       
+      {/* Folder label above card */}
+      <p className="text-surface-400 text-xs mb-1">
+        {getWordFolderLabels(currentWord)}
+      </p>
+
       {!isRevealed && (
         <p className="text-surface-400 text-sm mb-6 transition-opacity">
           Focus only on this word.
         </p>
       )}
+      {isRevealed && <div className="mb-6" />}
 
       {/* The Flashcard */}
       <div className="w-full max-w-[520px] [perspective:1000px]">
@@ -208,7 +267,51 @@ export function Study() {
 
       {/* Meta info below card */}
       <div className="mt-6 text-sm text-surface-400">
-        {currentWord.level} • {getStatusLabel(currentWord.learning_state.mastery)}
+        {currentWord.level} · {getStatusLabel(currentWord.learning_state.mastery)}
+      </div>
+
+      {/* Folder switcher */}
+      <div className="mt-3 relative" ref={switcherRef}>
+        <button
+          onClick={() => setFolderSwitcherOpen(!folderSwitcherOpen)}
+          className="text-xs text-surface-400 hover:text-surface-600 transition-colors"
+        >
+          Study by Folder: <span className="underline">{getActiveFolderName()}</span>
+        </button>
+        
+        {folderSwitcherOpen && (
+          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-surface-100 py-2 min-w-[200px] z-50">
+            <button
+              onClick={() => handleFolderSwitch(undefined)}
+              className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-50 transition-colors ${
+                !activeFolderId ? 'text-surface-900 font-medium' : 'text-surface-600'
+              }`}
+            >
+              All Words
+            </button>
+            {folders.map(f => (
+              <button
+                key={f.id}
+                onClick={() => handleFolderSwitch(f.id)}
+                className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-50 transition-colors flex items-center gap-2 ${
+                  activeFolderId === f.id ? 'text-surface-900 font-medium' : 'text-surface-600'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: f.color }} />
+                {f.name}
+              </button>
+            ))}
+            <button
+              onClick={() => handleFolderSwitch('ungrouped')}
+              className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-50 transition-colors flex items-center gap-2 ${
+                activeFolderId === 'ungrouped' ? 'text-surface-900 font-medium' : 'text-surface-600'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full flex-shrink-0 bg-surface-300" />
+              Ungrouped
+            </button>
+          </div>
+        )}
       </div>
 
       {queue.length > 1 && (

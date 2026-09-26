@@ -5,9 +5,10 @@ import { ReviewRating } from '../../src/types';
 const router = Router();
 
 // GET /api/study/queue
-router.get('/queue', (_req, res) => {
+router.get('/queue', (req, res) => {
   try {
-    const queue = StudyService.getStudyQueue(20);
+    const folderId = req.query.folderId as string | undefined;
+    const queue = StudyService.getStudyQueue(20, folderId);
     res.json(queue);
   } catch (error) {
     console.error('Error fetching study queue:', error);

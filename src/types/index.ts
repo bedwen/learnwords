@@ -31,6 +31,7 @@ export interface LearningState {
 
 export interface WordWithState extends Word {
   learning_state: LearningState;
+  folderIds?: string[];
 }
 
 export interface CreateWordDto {
@@ -41,6 +42,7 @@ export interface CreateWordDto {
   example_sentence?: string;
   example_translation?: string;
   notes?: string;
+  folderIds?: string[];
 }
 
 export interface UpdateWordDto {
@@ -51,6 +53,7 @@ export interface UpdateWordDto {
   example_sentence?: string | null;
   example_translation?: string | null;
   notes?: string | null;
+  folderIds?: string[];
 }
 
 export interface CEFRStats {
@@ -80,4 +83,19 @@ export interface DetailedStats {
     rating: ReviewRating;
     reviewed_at: string;
   }[];
+}
+
+// Folder types
+export interface Folder {
+  id: string;
+  name: string;
+  color: string;
+  wordCount: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FolderListResponse {
+  folders: Folder[];
+  ungroupedCount: number;
 }

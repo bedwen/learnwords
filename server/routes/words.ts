@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { WordService } from '../services/words';
+import { FolderService } from '../services/folders';
 import { CreateWordDto, UpdateWordDto } from '../../src/types';
 
 const router = Router();
@@ -12,7 +13,8 @@ router.get('/', (req, res) => {
       level: req.query.level as string,
       status: req.query.status as string,
       sortBy: req.query.sortBy as 'created_at' | 'word',
-      order: req.query.order as 'asc' | 'desc'
+      order: req.query.order as 'asc' | 'desc',
+      folderId: req.query.folderId as string,
     });
     res.json(words);
   } catch (error) {
@@ -87,6 +89,37 @@ router.delete('/:id', (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting word:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/words/:wordId/folders — Set folder associations (replaces all)
+router.post('/:wordId/folders', (req, res) => {
+  try {
+    const { folderIds } = req.body as { folderIds: string[] };
+    
+    if (!Array.isArray(folderIds)) {
+      return res.status(400).json({ error: 'folderIds must be an array' });
+    }
+
+    FolderService.setWordFolders(req.params.wordId, folderIds);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error setting word folders:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/words/:wordId/folders/:folderId — Remove word from a folder
+router.delete('/:wordId/folders/:folderId', (req, res) => {
+  try {
+    const success = FolderService.removeWordFromFolder(req.params.wordId, req.params.folderId);
+    if (!success) {
+      return res.status(404).json({ error: 'Association not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error removing word from folder:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
