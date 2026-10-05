@@ -1,20 +1,46 @@
 import { useEffect, useState } from 'react';
 import { DetailedStats } from '../types';
 import { getDetailedStats } from '../api/dashboard';
+import { getCached, setCached } from '../api/cache';
 import { Badge } from '../components/ui/Badge';
 
 export function Statistics() {
-  const [stats, setStats] = useState<DetailedStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedStats = getCached<DetailedStats>('detailed_stats');
+  const [stats, setStats] = useState<DetailedStats | null>(cachedStats);
+  const [loading, setLoading] = useState(!cachedStats);
 
   useEffect(() => {
     getDetailedStats()
-      .then(setStats)
+      .then((data) => {
+        setStats(data);
+        setCached('detailed_stats', data);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="py-20 text-center text-surface-500">Loading...</div>;
+  if (loading && !stats) {
+    return (
+      <div className="py-8 max-w-5xl mx-auto space-y-8 animate-pulse">
+        <div>
+          <div className="h-8 w-40 bg-surface-200 rounded mb-2" />
+          <div className="h-4 w-60 bg-surface-200 rounded" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="h-36 bg-surface-100/60 rounded-xl border border-surface-200" />
+          <div className="h-36 bg-surface-100/60 rounded-xl border border-surface-200" />
+          <div className="h-36 bg-surface-100/60 rounded-xl border border-surface-200" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="h-24 bg-surface-100/60 rounded-xl border border-surface-200" />
+          <div className="h-24 bg-surface-100/60 rounded-xl border border-surface-200" />
+          <div className="h-24 bg-surface-100/60 rounded-xl border border-surface-200" />
+          <div className="h-24 bg-surface-100/60 rounded-xl border border-surface-200" />
+        </div>
+      </div>
+    );
+  }
+
   if (!stats) return <div className="py-20 text-center text-red-500">Failed to load data.</div>;
 
   return (
@@ -27,13 +53,13 @@ export function Statistics() {
       {/* Vocabulary and Distribution */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Total Vocabulary */}
-        <div className="bg-white p-6 rounded-xl border border-surface-100 shadow-sm flex flex-col justify-center items-center text-center">
+        <div className="bg-card transition-colors duration-200 p-6 rounded-xl border border-surface-100 shadow-sm flex flex-col justify-center items-center text-center">
           <p className="text-surface-500 text-sm mb-2">Total Words</p>
           <p className="text-5xl font-bold text-surface-900">{stats.totalWords}</p>
         </div>
 
         {/* CEFR Distribution */}
-        <div className="bg-white p-6 rounded-xl border border-surface-100 shadow-sm">
+        <div className="bg-card transition-colors duration-200 p-6 rounded-xl border border-surface-100 shadow-sm">
           <p className="text-surface-500 text-sm mb-4 font-medium">CEFR Distribution</p>
           <div className="space-y-3">
             {['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].map(level => {
@@ -54,7 +80,7 @@ export function Statistics() {
         </div>
 
         {/* Mastery Distribution */}
-        <div className="bg-white p-6 rounded-xl border border-surface-100 shadow-sm">
+        <div className="bg-card transition-colors duration-200 p-6 rounded-xl border border-surface-100 shadow-sm">
           <p className="text-surface-500 text-sm mb-4 font-medium">Learning Status</p>
           <div className="space-y-2">
             {[
@@ -83,19 +109,19 @@ export function Statistics() {
 
       {/* Top metrics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white p-6 rounded-xl border border-surface-100 shadow-sm text-center">
+        <div className="bg-card transition-colors duration-200 p-6 rounded-xl border border-surface-100 shadow-sm text-center">
           <p className="text-surface-500 text-sm mb-1">Total Reviews</p>
           <p className="text-3xl font-bold text-surface-900">{stats.totalReviews}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-surface-100 shadow-sm text-center">
+        <div className="bg-card transition-colors duration-200 p-6 rounded-xl border border-surface-100 shadow-sm text-center">
           <p className="text-surface-500 text-sm mb-1">Correct Answers</p>
           <p className="text-3xl font-bold text-green-600">{stats.totalCorrect}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-surface-100 shadow-sm text-center">
+        <div className="bg-card transition-colors duration-200 p-6 rounded-xl border border-surface-100 shadow-sm text-center">
           <p className="text-surface-500 text-sm mb-1">Wrong Answers</p>
           <p className="text-3xl font-bold text-red-600">{stats.totalWrong}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-surface-100 shadow-sm text-center">
+        <div className="bg-card transition-colors duration-200 p-6 rounded-xl border border-surface-100 shadow-sm text-center">
           <p className="text-surface-500 text-sm mb-1">Accuracy</p>
           <p className="text-3xl font-bold text-surface-900">{stats.accuracy}%</p>
         </div>
@@ -104,7 +130,7 @@ export function Statistics() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
         {/* Recent Reviews */}
-        <div className="bg-white rounded-xl border border-surface-100 shadow-sm overflow-hidden">
+        <div className="bg-card transition-colors duration-200 rounded-xl border border-surface-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-surface-100 bg-surface-50/50">
             <h2 className="font-semibold text-surface-900">Recent Reviews</h2>
           </div>
@@ -132,7 +158,7 @@ export function Statistics() {
         </div>
 
         {/* Difficult Words */}
-        <div className="bg-white rounded-xl border border-surface-100 shadow-sm overflow-hidden">
+        <div className="bg-card transition-colors duration-200 rounded-xl border border-surface-100 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-surface-100 bg-surface-50/50">
             <h2 className="font-semibold text-surface-900">Difficult Words</h2>
           </div>

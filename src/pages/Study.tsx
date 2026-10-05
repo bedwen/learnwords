@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { WordWithState, ReviewRating, Folder } from '../types';
+import { useSearchParams } from 'react-router-dom';
+import { WordWithState, ReviewRating, Folder, FolderListResponse } from '../types';
 import { getStudyQueue, submitReview } from '../api/study';
 import { getFolders } from '../api/folders';
+import { getCached, setCached } from '../api/cache';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 
@@ -9,7 +11,8 @@ interface StudyProps {
   folderId?: string;
 }
 
-export function Study({ folderId: initialFolderId }: StudyProps) {
+export function Study({ folderId }: StudyProps = {}) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [queue, setQueue] = useState<WordWithState[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,15 +24,27 @@ export function Study({ folderId: initialFolderId }: StudyProps) {
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Folder filtering
-  const [activeFolderId, setActiveFolderId] = useState<string | undefined>(initialFolderId);
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [activeFolderId, setActiveFolderId] = useState<string | undefined>(
+    () => searchParams.get('folderId') || folderId || undefined
+  );
+  const cachedFolders = getCached<FolderListResponse>('folders_list');
+  const [folders, setFolders] = useState<Folder[]>(cachedFolders ? cachedFolders.folders : []);
   const [folderSwitcherOpen, setFolderSwitcherOpen] = useState(false);
   const switcherRef = useRef<HTMLDivElement>(null);
+
+  // Sync activeFolderId if URL search parameters change
+  useEffect(() => {
+    const urlFolderId = searchParams.get('folderId') || folderId || undefined;
+    setActiveFolderId(urlFolderId);
+  }, [searchParams, folderId]);
 
   // Load folders for the switcher and for word labels
   useEffect(() => {
     getFolders()
-      .then(data => setFolders(data.folders))
+      .then(data => {
+        setFolders(data.folders);
+        setCached('folders_list', data);
+      })
       .catch(console.error);
   }, []);
 
@@ -136,6 +151,7 @@ export function Study({ folderId: initialFolderId }: StudyProps) {
 
   const handleFolderSwitch = (fId: string | undefined) => {
     setActiveFolderId(fId);
+    setSearchParams(fId ? { folderId: fId } : {});
     setFolderSwitcherOpen(false);
     setIsRevealed(false);
   };
@@ -182,19 +198,21 @@ export function Study({ folderId: initialFolderId }: StudyProps) {
         {getWordFolderLabels(currentWord)}
       </p>
 
-      {!isRevealed && (
-        <p className="text-surface-400 text-sm mb-6 transition-opacity">
-          Focus only on this word.
-        </p>
-      )}
-      {isRevealed && <div className="mb-6" />}
+      <p 
+        className={`text-surface-400 text-sm mb-6 transition-opacity duration-200 ${
+          isRevealed ? 'opacity-0 select-none pointer-events-none' : 'opacity-100'
+        }`}
+        aria-hidden={isRevealed}
+      >
+        Focus only on this word.
+      </p>
 
       {/* The Flashcard */}
       <div className="w-full max-w-[520px] [perspective:1000px]">
         <div className={`relative w-full [transform-style:preserve-3d] ${isTransitioning ? '' : 'transition-transform duration-500'} ${isRevealed ? '[transform:rotateY(180deg)]' : ''}`} style={{ minHeight: '400px' }}>
           
           {/* FRONT FACE */}
-          <div className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-white rounded-2xl shadow-md border border-surface-100 p-8 sm:p-12 flex flex-col items-center text-center" style={{ pointerEvents: isRevealed ? 'none' : 'auto' }}>
+          <div className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card transition-colors duration-200 rounded-2xl shadow-md border border-surface-100 px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center text-center" style={{ pointerEvents: isRevealed ? 'none' : 'auto' }}>
             {/* Top Badge */}
             <div className="absolute top-6 left-0 right-0 flex justify-center">
               <Badge variant={currentWord.level}>{currentWord.level}</Badge>
@@ -212,13 +230,13 @@ export function Study({ folderId: initialFolderId }: StudyProps) {
           </div>
 
           {/* BACK FACE */}
-          <div className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-white rounded-2xl shadow-md border border-surface-100 p-8 sm:p-12 flex flex-col items-center text-center" style={{ pointerEvents: isRevealed ? 'auto' : 'none' }}>
+          <div className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card transition-colors duration-200 rounded-2xl shadow-md border border-surface-100 px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center text-center" style={{ pointerEvents: isRevealed ? 'auto' : 'none' }}>
             
             {/* English Word (Small) */}
             <h3 className="text-lg font-medium text-surface-400 mb-6">{currentWord.word}</h3>
             
-            <div className="flex-1 w-full flex flex-col items-center justify-center space-y-6">
-              <p className="text-2xl text-surface-900 font-semibold pb-6 border-b border-surface-100 w-full">
+            <div className="flex-1 w-full min-h-0 overflow-y-auto my-auto pr-1 space-y-4 text-center overscroll-contain">
+              <p className="text-xl sm:text-2xl font-semibold text-surface-900 pb-4 border-b border-surface-100 w-full break-words">
                 {currentWord.meaning}
               </p>
               
@@ -232,31 +250,37 @@ export function Study({ folderId: initialFolderId }: StudyProps) {
                   )}
                 </div>
               )}
+
+              {currentWord.notes && (
+                <p className="text-surface-500 text-xs italic mt-2">
+                  Note: {currentWord.notes}
+                </p>
+              )}
             </div>
 
             {/* Rating Buttons */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full mt-auto pt-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full mt-auto pt-4 flex-shrink-0">
               <button 
                 onClick={() => handleRating('again')}
-                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-red-100 text-red-700 hover:bg-red-200"
+                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/50"
               >
                 Again
               </button>
               <button 
                 onClick={() => handleRating('hard')}
-                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200"
+                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-900/50"
               >
                 Hard
               </button>
               <button 
                 onClick={() => handleRating('good')}
-                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-green-100 text-green-700 hover:bg-green-200"
+                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-950/50 dark:text-green-300 dark:hover:bg-green-900/50"
               >
                 Good
               </button>
               <button 
                 onClick={() => handleRating('easy')}
-                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200"
+                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50"
               >
                 Easy
               </button>
@@ -280,7 +304,7 @@ export function Study({ folderId: initialFolderId }: StudyProps) {
         </button>
         
         {folderSwitcherOpen && (
-          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-white rounded-xl shadow-lg border border-surface-100 py-2 min-w-[200px] z-50">
+          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-card transition-colors duration-200 rounded-xl shadow-lg border border-surface-100 py-2 min-w-[200px] z-50">
             <button
               onClick={() => handleFolderSwitch(undefined)}
               className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-50 transition-colors ${

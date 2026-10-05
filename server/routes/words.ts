@@ -1,9 +1,17 @@
 import { Router } from 'express';
-import { WordService } from '../services/words';
+import { WordService, CEFR_LEVELS, FolderNotFoundError } from '../services/words';
 import { FolderService } from '../services/folders';
-import { CreateWordDto, UpdateWordDto } from '../../src/types';
+import { CreateWordDto, UpdateWordDto, BatchCefrDto, BatchDeleteDto, BatchFolderDto } from '../../src/types';
 
 const router = Router();
+
+function isValidIdList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((id) => typeof id === 'string' && id.trim().length > 0)
+  );
+}
 
 // GET /api/words
 router.get('/', (req, res) => {
@@ -19,6 +27,68 @@ router.get('/', (req, res) => {
     res.json(words);
   } catch (error) {
     console.error('Error fetching words:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// --- Batch routes (must be declared before /:id routes) ---
+
+// POST /api/words/batch/cefr — Manually change CEFR level for multiple words
+router.post('/batch/cefr', (req, res) => {
+  try {
+    const { wordIds, level } = (req.body ?? {}) as Partial<BatchCefrDto>;
+    if (!isValidIdList(wordIds)) {
+      return res.status(400).json({ error: 'wordIds must be a non-empty array of IDs' });
+    }
+    if (typeof level !== 'string' || !CEFR_LEVELS.includes(level)) {
+      return res.status(400).json({ error: 'Invalid CEFR level' });
+    }
+
+    const count = WordService.batchUpdateCefr(wordIds, level);
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error('Error batch updating CEFR level:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/words/batch/delete — Delete multiple words
+router.post('/batch/delete', (req, res) => {
+  try {
+    const { wordIds } = (req.body ?? {}) as Partial<BatchDeleteDto>;
+    if (!isValidIdList(wordIds)) {
+      return res.status(400).json({ error: 'wordIds must be a non-empty array of IDs' });
+    }
+
+    const count = WordService.batchDeleteWords(wordIds);
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error('Error batch deleting words:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/words/batch/folder — Add/remove multiple words to/from a folder
+router.post('/batch/folder', (req, res) => {
+  try {
+    const { wordIds, folderId, action } = (req.body ?? {}) as Partial<BatchFolderDto>;
+    if (!isValidIdList(wordIds)) {
+      return res.status(400).json({ error: 'wordIds must be a non-empty array of IDs' });
+    }
+    if (typeof folderId !== 'string' || folderId.trim().length === 0) {
+      return res.status(400).json({ error: 'folderId is required' });
+    }
+    if (action !== 'add' && action !== 'remove') {
+      return res.status(400).json({ error: "action must be 'add' or 'remove'" });
+    }
+
+    WordService.batchUpdateFolder(wordIds, folderId, action);
+    res.json({ success: true });
+  } catch (error) {
+    if (error instanceof FolderNotFoundError) {
+      return res.status(404).json({ error: 'Folder not found' });
+    }
+    console.error('Error batch updating folder:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

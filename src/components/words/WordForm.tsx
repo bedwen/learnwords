@@ -70,7 +70,7 @@ export function WordForm({ initialData, onSubmit, onCancel, preSelectedFolderIds
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       {error && (
-        <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+        <div className="p-3 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-sm">
           {error}
         </div>
       )}
@@ -152,13 +152,13 @@ export function WordForm({ initialData, onSubmit, onCancel, preSelectedFolderIds
                   onClick={() => toggleFolder(folder.id)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
                     isSelected
-                      ? 'border-surface-900 bg-surface-900 text-white'
-                      : 'border-surface-200 bg-white text-surface-600 hover:border-surface-300'
+                      ? 'border-surface-900 bg-surface-900 text-card'
+                      : 'border-surface-200 bg-card transition-colors duration-200 text-surface-600 hover:border-surface-300'
                   }`}
                 >
                   <span
                     className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: isSelected ? '#fff' : folder.color }}
+                    style={{ backgroundColor: isSelected ? 'currentColor' : folder.color }}
                   />
                   {folder.name}
                 </button>

@@ -48,7 +48,7 @@ export function FolderForm({ initialData, onSubmit, onCancel }: FolderFormProps)
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       {error && (
-        <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">
+        <div className="p-3 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-lg text-sm">
           {error}
         </div>
       )}

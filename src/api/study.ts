@@ -1,4 +1,5 @@
 import { WordWithState, ReviewRating } from '../types';
+import { clearCache } from './cache';
 
 const API_BASE = '/api/study';
 
@@ -19,5 +20,7 @@ export async function submitReview(wordId: string, rating: ReviewRating): Promis
     body: JSON.stringify({ wordId, rating }),
   });
   if (!res.ok) throw new Error('Failed to submit review');
+  clearCache('dashboard');
+  clearCache('detailed_stats');
   return res.json();
 }

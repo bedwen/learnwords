@@ -1,4 +1,5 @@
 import { Folder, FolderListResponse } from '../types';
+import { clearCache } from './cache';
 
 const API_BASE = '/api/folders';
 
@@ -16,6 +17,8 @@ export async function createFolder(data: { name: string; color: string }): Promi
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to create folder');
+  clearCache('folders');
+  clearCache('words');
   return res.json();
 }
 
@@ -26,10 +29,14 @@ export async function updateFolder(id: string, data: { name?: string; color?: st
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to update folder');
+  clearCache('folders');
+  clearCache('words');
   return res.json();
 }
 
 export async function deleteFolder(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete folder');
+  clearCache('folders');
+  clearCache('words');
 }

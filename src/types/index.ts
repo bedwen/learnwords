@@ -56,6 +56,21 @@ export interface UpdateWordDto {
   folderIds?: string[];
 }
 
+export interface BatchCefrDto {
+  wordIds: string[];
+  level: CEFRLevel;
+}
+
+export interface BatchDeleteDto {
+  wordIds: string[];
+}
+
+export interface BatchFolderDto {
+  wordIds: string[];
+  folderId: string;
+  action: 'add' | 'remove';
+}
+
 export interface CEFRStats {
   level: CEFRLevel;
   totalWords: number;

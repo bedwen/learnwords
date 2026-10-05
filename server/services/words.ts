@@ -3,6 +3,15 @@ import { getDatabase } from '../db';
 import { WordWithState, CreateWordDto, UpdateWordDto } from '../../src/types';
 import { FolderService } from './folders';
 
+export const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+
+export class FolderNotFoundError extends Error {
+  constructor() {
+    super('Folder not found');
+    this.name = 'FolderNotFoundError';
+  }
+}
+
 export class WordService {
   /**
    * Fetch a list of words, optionally filtered and sorted.
@@ -229,6 +238,84 @@ export class WordService {
     const db = getDatabase();
     const result = db.prepare(`DELETE FROM words WHERE id = ?`).run(id);
     return result.changes > 0;
+  }
+
+  /**
+   * Manually change the CEFR level of multiple words (user-initiated only).
+   * Learning state and review history are never touched.
+   * Returns the number of words updated.
+   */
+  static batchUpdateCefr(wordIds: string[], level: string): number {
+    if (!CEFR_LEVELS.includes(level)) {
+      throw new Error('Invalid CEFR level');
+    }
+    const ids = Array.from(new Set(wordIds));
+    if (ids.length === 0) return 0;
+
+    const db = getDatabase();
+    const stmt = db.prepare(`UPDATE words SET level = ?, updated_at = ? WHERE id = ?`);
+    const now = new Date().toISOString();
+
+    const transaction = db.transaction((idList: string[]) => {
+      let count = 0;
+      for (const id of idList) {
+        count += stmt.run(level, now, id).changes;
+      }
+      return count;
+    });
+
+    return transaction(ids);
+  }
+
+  /**
+   * Delete multiple words. Cascades remove learning states, review history
+   * and folder links. Non-existent IDs are ignored.
+   * Returns the number of words deleted.
+   */
+  static batchDeleteWords(wordIds: string[]): number {
+    const ids = Array.from(new Set(wordIds));
+    if (ids.length === 0) return 0;
+
+    const db = getDatabase();
+    const stmt = db.prepare(`DELETE FROM words WHERE id = ?`);
+
+    const transaction = db.transaction((idList: string[]) => {
+      let count = 0;
+      for (const id of idList) {
+        count += stmt.run(id).changes;
+      }
+      return count;
+    });
+
+    return transaction(ids);
+  }
+
+  /**
+   * Add multiple words to a folder, or remove them from it.
+   * Only word_folders links are changed. Throws FolderNotFoundError if the folder is missing.
+   */
+  static batchUpdateFolder(wordIds: string[], folderId: string, action: 'add' | 'remove'): void {
+    const db = getDatabase();
+
+    const folder = db.prepare(`SELECT 1 FROM folders WHERE id = ?`).get(folderId);
+    if (!folder) {
+      throw new FolderNotFoundError();
+    }
+
+    const ids = Array.from(new Set(wordIds));
+    if (ids.length === 0) return;
+
+    const stmt = action === 'add'
+      ? db.prepare(`INSERT OR IGNORE INTO word_folders (word_id, folder_id) SELECT id, ? FROM words WHERE id = ?`)
+      : db.prepare(`DELETE FROM word_folders WHERE folder_id = ? AND word_id = ?`);
+
+    const transaction = db.transaction((idList: string[]) => {
+      for (const id of idList) {
+        stmt.run(folderId, id);
+      }
+    });
+
+    transaction(ids);
   }
 
   /**
