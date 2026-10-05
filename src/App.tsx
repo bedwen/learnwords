@@ -1,70 +1,54 @@
-import { useState } from 'react';
+import { Routes, Route, Navigate, NavLink, Link } from 'react-router-dom';
+import logo from './assets/logo.png';
+import logoDark from './assets/logo-dark.png';
 import { Words } from './pages/Words';
 import { Study } from './pages/Study';
 import { Dashboard } from './pages/Dashboard';
 import { Statistics } from './pages/Statistics';
+import { DataManagement } from './pages/DataManagement';
+import { ThemeToggle } from './components/ui/ThemeToggle';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { ToastProvider } from './context/ToastContext';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState('dashboard');
-  const [studyFolderId, setStudyFolderId] = useState<string | undefined>();
-
-  const handleNavigate = (page: string, folderId?: string) => {
-    setCurrentPage(page);
-    if (page === 'study') {
-      setStudyFolderId(folderId);
-    }
-  };
-
-  const renderPage = () => {
-    switch (currentPage) {
-      case 'dashboard':
-        return <Dashboard onNavigate={handleNavigate} />;
-      case 'words':
-        return <Words onNavigateToStudy={(folderId) => handleNavigate('study', folderId)} />;
-      case 'study':
-        return <Study folderId={studyFolderId} />;
-      case 'statistics':
-        return <Statistics />;
-      default:
-        return <Dashboard onNavigate={handleNavigate} />;
-    }
-  };
-
-  const navLinkClass = (page: string) => `
+  const navLinkClass = ({ isActive }: { isActive: boolean }) => `
     px-4 py-2 font-medium transition-colors
-    ${currentPage === page 
+    ${isActive 
       ? 'text-surface-900 border-b-2 border-surface-900' 
       : 'text-surface-500 hover:text-surface-900'
     }
   `;
 
   return (
-    <div className="min-h-screen bg-[#faf8f5]">
+    <ToastProvider>
+    <div className="min-h-screen bg-background text-surface-900 transition-colors duration-200">
       {/* Navigation */}
-      <nav className="bg-white border-b border-surface-200 sticky top-0 z-40">
+      <nav className="bg-card border-b border-surface-200 sticky top-0 z-40 transition-colors duration-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <button 
-                onClick={() => handleNavigate('dashboard')}
-                className="text-lg font-bold text-surface-900"
-              >
-                LearnWords
-              </button>
+              <Link to="/dashboard" className="flex items-center">
+                <img src={logo} alt="LearnWords" className="h-9 dark:hidden" />
+                <img src={logoDark} alt="LearnWords" className="h-9 hidden dark:block" />
+              </Link>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4">
-              <button onClick={() => handleNavigate('dashboard')} className={navLinkClass('dashboard')}>
+              <NavLink to="/dashboard" className={navLinkClass}>
                 Dashboard
-              </button>
-              <button onClick={() => handleNavigate('words')} className={navLinkClass('words')}>
+              </NavLink>
+              <NavLink to="/words" className={navLinkClass}>
                 Words
-              </button>
-              <button onClick={() => handleNavigate('study')} className={navLinkClass('study')}>
+              </NavLink>
+              <NavLink to="/study" className={navLinkClass}>
                 Study
-              </button>
-              <button onClick={() => handleNavigate('statistics')} className={navLinkClass('statistics')}>
+              </NavLink>
+              <NavLink to="/statistics" className={navLinkClass}>
                 Statistics
-              </button>
+              </NavLink>
+              <NavLink to="/data" className={navLinkClass}>
+                Data
+              </NavLink>
+              <ThemeToggle />
             </div>
           </div>
         </div>
@@ -72,9 +56,20 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {renderPage()}
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/words" element={<Words />} />
+            <Route path="/study" element={<Study />} />
+            <Route path="/statistics" element={<Statistics />} />
+            <Route path="/data" element={<DataManagement />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
     </div>
+    </ToastProvider>
   );
 }
 

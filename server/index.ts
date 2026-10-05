@@ -1,34 +1,17 @@
-import express from 'express';
-import cors from 'cors';
 import { getDatabase, initializeSchema, closeDatabase } from './db';
+import { createApp } from './app';
 
-import wordsRouter from './routes/words';
-import studyRouter from './routes/study';
-import dashboardRouter from './routes/dashboard';
-import foldersRouter from './routes/folders';
-
-const app = express();
+const app = createApp();
 const PORT = 3001;
-
-app.use(cors());
-app.use(express.json());
-
-app.use('/api/words', wordsRouter);
-app.use('/api/study', studyRouter);
-app.use('/api/dashboard', dashboardRouter);
-app.use('/api/folders', foldersRouter);
-
-// Health check endpoint
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok' });
-});
+// Bind to loopback only so the API is never exposed to the LAN (D018).
+const HOST = '127.0.0.1';
 
 // Initialize database and start server
 const db = getDatabase();
 initializeSchema(db);
 
-const server = app.listen(PORT, () => {
-  console.log(`LearnWords API running on http://localhost:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  console.log(`LearnWords API running on http://${HOST}:${PORT}`);
 });
 
 // Graceful shutdown
