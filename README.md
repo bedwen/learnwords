@@ -1,40 +1,72 @@
 # LearnWords
 **This site was created to help users memorize vocabulary using flashcards.**
-Aditionally, this website was created using AI tools to help me learn to code with artificial intelligence.
+Additionally, this website was created using AI tools to help me learn to code with artificial intelligence.
+
+*LearnWords now has a dark mode feature!*
 
 ---
-**Dashboard**
+## **Dashboard**
+
 The homepage displays word counts and “Start Studying” buttons.
-![Dashboard Page (Main Page)](imagesforreadme/LWmainpage.png)
+![Dashboard Page (Main Page)](imagesforreadme/dashboardpagewhiteandark.png)
+
 
 ---
-**Words**
-The Words page displays the words we have added and an “Add Word” button.
-![Words Page](imagesforreadme/LWwords.jpg)
+## **Words**
+
+The Words page lets you create groups and add words!
+
+Groups keep the words you want together. You can select specific words within a group and move them to another group, change their CEFR levels all at once, or delete them entirely.
+
+If you have a word that doesn’t belong to any particular group, no problem! There’s also an “ungrouped” group for those words.
+![Groups Page](imagesforreadme/wordsmaingpage.png)
+![Words Page](imagesforreadme/wordsgrouppage.jpg)
 
 ---
-**Add Word**
+## **Add Word**
+
 In the word addition module, we can add the word itself, its meaning, CEFR level, part of speech, an example sentence, and its translation.
-![Add Word Page](imagesforreadme/LWaddword.png)
+![Add Word Page](imagesforreadme/wordaddpage.png)
 
 ---
-**Study**
+## **Study**
+
 On the Study page, the flashcards display the word itself on the front and its meanings on the back. This allows users to practice memorizing vocabulary.
-![Study Page](imagesforreadme/LWstudypage.png)
+
+You can also see which group the word belongs to on the flashcard. By clicking the group name below the flashcard, you can switch to a different word group to study.
+
+Powered by a Spaced Repetition System (SRS), the app automatically schedules when you should review each word based on your rating (Again, Hard, Good, Easy), helping you build long-term memory effortlessly.
+![Study Page](imagesforreadme/studypagewhiteanddark.png)
+![Flashcard Page](imagesforreadme/studypage.jpg)
 
 ---
-**Statistics**
+## **Statistics**
+
 On the Statistics page, we can view statistics such as the number of words, CEFR level distribution, learning status, total views, total number of correct and incorrect answers, and accuracy rate.
-![Statistics](imagesforreadme/LWstatistics.png)
+![Statistics](imagesforreadme/statisticspage.png)
+
+---
+## **Data Management**
+
+On the Data Management page, you can easily export your word lists or import new ones directly via CSV. You can also create complete JSON backups to keep your learning progress safe and restore them anytime!
+![Data Management](imagesforreadme/datamanagementpage.png)
+
+---
+## **Tech Stack**
+
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS
+- **Backend:** Node.js, Express
+- **Database:** SQLite (`better-sqlite3`)
+- **Testing:** Vitest
 
 
 ---
-# **Installation**
+## **Installation**
 **Prerequisites**
-- Node.js (https://nodejs.org/) v18 or later
+- [Node.js](https://nodejs.org/) v18 or later
 
 ---
-**Installation**
+**Setup & Run**
 Clone repository:
 
 - `git clone https://github.com/bedwen/learnwords`
