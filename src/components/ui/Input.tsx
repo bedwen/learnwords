@@ -17,7 +17,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
         )}
         <input
           ref={ref}
-          className={`px-3 py-2 bg-white border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-surface-900 focus:border-transparent transition-shadow ${
+          className={`px-3 py-2 bg-card transition-colors duration-200 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-surface-900 focus:border-transparent transition-shadow ${
             error ? 'border-red-300 focus:ring-red-500' : ''
           } ${className}`}
           {...props}

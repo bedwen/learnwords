@@ -27,10 +27,10 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-0">
       <div 
-        className="fixed inset-0 bg-surface-900/20 backdrop-blur-sm transition-opacity" 
+        className="fixed inset-0 bg-surface-900/20 dark:bg-black/60 backdrop-blur-sm transition-opacity" 
         onClick={onClose}
       />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+      <div className="relative bg-card transition-colors duration-200 rounded-2xl shadow-xl w-full max-w-lg p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-semibold text-surface-900">{title}</h2>
           <button 

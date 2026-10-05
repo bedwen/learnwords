@@ -5,14 +5,14 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export function Button({ children, variant = 'primary', className = '', ...props }: ButtonProps) {
-  let baseClass = 'inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+  let baseClass = 'inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-background';
   
   if (variant === 'primary') {
-    baseClass += ' bg-surface-900 text-white hover:bg-surface-800 focus:ring-surface-900';
+    baseClass += ' bg-surface-900 text-card hover:bg-surface-800 focus:ring-surface-900';
   } else if (variant === 'secondary') {
-    baseClass += ' bg-white text-surface-700 border border-surface-200 hover:bg-surface-50 focus:ring-surface-500';
+    baseClass += ' bg-card transition-colors duration-200 text-surface-700 border border-surface-200 hover:bg-surface-50 focus:ring-surface-500';
   } else if (variant === 'danger') {
-    baseClass += ' bg-white text-red-600 border border-red-200 hover:bg-red-50 focus:ring-red-500';
+    baseClass += ' bg-card transition-colors duration-200 text-red-600 border border-red-200 hover:bg-red-50 focus:ring-red-500 dark:text-red-400 dark:border-red-900/60 dark:hover:bg-red-950/40';
   }
 
   return (
