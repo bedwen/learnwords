@@ -1,26 +1,37 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import {
+  CheckCircle2,
+  Folder as FolderIcon,
+  RotateCw,
+  ArrowRight,
+  BookOpen,
+  Keyboard,
+  ChevronDown,
+} from 'lucide-react';
 import { WordWithState, ReviewRating, Folder, FolderListResponse } from '../types';
 import { getStudyQueue, submitReview } from '../api/study';
 import { getFolders } from '../api/folders';
 import { getCached, setCached } from '../api/cache';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
 
 interface StudyProps {
   folderId?: string;
 }
 
 export function Study({ folderId }: StudyProps = {}) {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [queue, setQueue] = useState<WordWithState[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // State for the current card
   const [isRevealed, setIsRevealed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // When true, disables CSS transition so the card flips instantly (no animation)
+  // When true, disables CSS transition so the card flips instantly
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Folder filtering
@@ -41,7 +52,7 @@ export function Study({ folderId }: StudyProps = {}) {
   // Load folders for the switcher and for word labels
   useEffect(() => {
     getFolders()
-      .then(data => {
+      .then((data) => {
         setFolders(data.folders);
         setCached('folders_list', data);
       })
@@ -76,38 +87,36 @@ export function Study({ folderId }: StudyProps = {}) {
     fetchQueue();
   }, [fetchQueue]);
 
-  const handleRating = useCallback(async (rating: ReviewRating) => {
-    if (queue.length === 0 || submitting) return;
-    
-    setSubmitting(true);
-    const currentWord = queue[0];
-    
-    try {
-      // 1. Disable CSS transition so the flip-back is instant (no animation)
-      setIsTransitioning(true);
-      // 2. Flip card to front and load next word in the same render batch
-      setIsRevealed(false);
-      setQueue(prev => prev.slice(1));
-      
-      // 3. Re-enable transitions on the next frame so future flips animate normally
-      requestAnimationFrame(() => {
+  const handleRating = useCallback(
+    async (rating: ReviewRating) => {
+      if (queue.length === 0 || submitting) return;
+
+      setSubmitting(true);
+      const currentWord = queue[0];
+
+      try {
+        setIsTransitioning(true);
+        setIsRevealed(false);
+        setQueue((prev) => prev.slice(1));
+
         requestAnimationFrame(() => {
-          setIsTransitioning(false);
+          requestAnimationFrame(() => {
+            setIsTransitioning(false);
+          });
         });
-      });
-      
-      // Fire API in background
-      await submitReview(currentWord.id, rating);
-    } catch (err) {
-      console.error('Failed to submit review:', err);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [queue, submitting]);
+
+        await submitReview(currentWord.id, rating);
+      } catch (err) {
+        console.error('Failed to submit review:', err);
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [queue, submitting]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
 
       if (e.code === 'Space') {
@@ -120,10 +129,18 @@ export function Study({ folderId }: StudyProps = {}) {
 
       if (isRevealed && !submitting && queue.length > 0) {
         switch (e.key) {
-          case '1': handleRating('again'); break;
-          case '2': handleRating('hard'); break;
-          case '3': handleRating('good'); break;
-          case '4': handleRating('easy'); break;
+          case '1':
+            handleRating('again');
+            break;
+          case '2':
+            handleRating('hard');
+            break;
+          case '3':
+            handleRating('good');
+            break;
+          case '4':
+            handleRating('easy');
+            break;
         }
       }
     };
@@ -132,21 +149,19 @@ export function Study({ folderId }: StudyProps = {}) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isRevealed, queue.length, loading, submitting, handleRating]);
 
-  // Get folder names for the current word
   const getWordFolderLabels = (word: WordWithState): string => {
     if (!word.folderIds || word.folderIds.length === 0) {
       return 'Ungrouped';
     }
     return word.folderIds
-      .map(id => folders.find(f => f.id === id)?.name || 'Unknown')
+      .map((id) => folders.find((f) => f.id === id)?.name || 'Unknown')
       .join(', ');
   };
 
-  // Get active folder name for display
   const getActiveFolderName = (): string => {
     if (!activeFolderId) return 'All Words';
     if (activeFolderId === 'ungrouped') return 'Ungrouped';
-    return folders.find(f => f.id === activeFolderId)?.name || 'Folder';
+    return folders.find((f) => f.id === activeFolderId)?.name || 'Folder';
   };
 
   const handleFolderSwitch = (fId: string | undefined) => {
@@ -157,28 +172,71 @@ export function Study({ folderId }: StudyProps = {}) {
   };
 
   if (loading && queue.length === 0) {
-    return <div className="py-20 text-center text-surface-500">Loading...</div>;
+    return (
+      <div className="py-24 flex flex-col items-center justify-center space-y-4">
+        <div className="h-10 w-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+        <p className="text-sm text-muted-foreground animate-pulse">Loading study queue...</p>
+      </div>
+    );
   }
 
   if (error) {
     return (
-      <div className="py-20 text-center">
-        <p className="text-red-600 mb-4">{error}</p>
-        <Button onClick={fetchQueue}>Retry</Button>
+      <div className="py-24 flex flex-col items-center justify-center text-center space-y-4">
+        <p className="text-destructive font-medium">{error}</p>
+        <Button onClick={fetchQueue} variant="outline">
+          Retry
+        </Button>
       </div>
     );
   }
 
   if (queue.length === 0) {
-    const emptyMessage = activeFolderId
-      ? `No words to study in ${getActiveFolderName()} right now.`
-      : "Great! You've finished all words due for review right now. You can add new words or come back later.";
-    
     return (
-      <div className="py-32 flex flex-col items-center justify-center text-center">
-        <h2 className="text-2xl font-semibold text-surface-900 mb-2">No Words to Study</h2>
-        <p className="text-surface-500 mb-6 max-w-md">{emptyMessage}</p>
-        <Button onClick={fetchQueue}>Refresh</Button>
+      <div className="py-20 flex flex-col items-center justify-center text-center max-w-lg mx-auto">
+        <Card className="w-full border-border p-8 space-y-6">
+          <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-xs">
+            <CheckCircle2 className="h-8 w-8" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold tracking-tight text-foreground">
+              Queue Complete!
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {activeFolderId
+                ? `No more words due in "${getActiveFolderName()}" right now.`
+                : "Great job! All scheduled reviews for today are finished."}
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Button
+              variant="secondary"
+              className="w-full sm:w-auto gap-2"
+              onClick={() => navigate('/')}
+            >
+              <span>Home</span>
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto gap-2"
+              onClick={fetchQueue}
+            >
+              <RotateCw className="h-4 w-4" />
+              <span>Check Again</span>
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full sm:w-auto gap-2 text-muted-foreground"
+              onClick={() => navigate('/words')}
+            >
+              <BookOpen className="h-4 w-4" />
+              <span>Browse Words</span>
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -191,158 +249,206 @@ export function Study({ folderId }: StudyProps = {}) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-100px)] py-8">
-      
-      {/* Folder label above card */}
-      <p className="text-surface-400 text-xs mb-1">
-        {getWordFolderLabels(currentWord)}
-      </p>
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-140px)] py-6 space-y-6">
+      {/* Session Top Bar: Folder Switcher & Queue Count */}
+      <div className="flex flex-wrap items-center justify-between w-full max-w-[540px] px-2 gap-3">
+        {/* Folder Switcher */}
+        <div className="relative" ref={switcherRef}>
+          <button
+            type="button"
+            onClick={() => setFolderSwitcherOpen(!folderSwitcherOpen)}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-secondary transition-colors text-foreground shadow-2xs"
+          >
+            <FolderIcon className="h-3.5 w-3.5 text-muted-foreground" />
+            <span>Folder: <strong>{getActiveFolderName()}</strong></span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
 
-      <p 
-        className={`text-surface-400 text-sm mb-6 transition-opacity duration-200 ${
-          isRevealed ? 'opacity-0 select-none pointer-events-none' : 'opacity-100'
-        }`}
-        aria-hidden={isRevealed}
-      >
-        Focus only on this word.
-      </p>
+          {folderSwitcherOpen && (
+            <div className="absolute top-full mt-1.5 left-0 bg-card rounded-xl shadow-lg border border-border py-1.5 min-w-[200px] z-50 animate-in fade-in-0 zoom-in-95 duration-150">
+              <button
+                type="button"
+                onClick={() => handleFolderSwitch(undefined)}
+                className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors ${
+                  !activeFolderId ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
+                }`}
+              >
+                All Words
+              </button>
+              {folders.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => handleFolderSwitch(f.id)}
+                  className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors flex items-center gap-2 ${
+                    activeFolderId === f.id ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
+                  }`}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: f.color }}
+                  />
+                  <span>{f.name}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => handleFolderSwitch('ungrouped')}
+                className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors flex items-center gap-2 ${
+                  activeFolderId === 'ungrouped' ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0 bg-muted-foreground" />
+                <span>Ungrouped</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Queue badge */}
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-xs font-medium">
+            {queue.length} {queue.length === 1 ? 'word' : 'words'} in queue
+          </Badge>
+        </div>
+      </div>
 
       {/* The Flashcard */}
-      <div className="w-full max-w-[520px] [perspective:1000px]">
-        <div className={`relative w-full [transform-style:preserve-3d] ${isTransitioning ? '' : 'transition-transform duration-500'} ${isRevealed ? '[transform:rotateY(180deg)]' : ''}`} style={{ minHeight: '400px' }}>
-          
+      <div className="w-full max-w-[540px] [perspective:1000px]">
+        <div
+          className={`relative w-full [transform-style:preserve-3d] ${
+            isTransitioning ? '' : 'transition-transform duration-500'
+          } ${isRevealed ? '[transform:rotateY(180deg)]' : ''}`}
+          style={{ minHeight: '420px' }}
+        >
           {/* FRONT FACE */}
-          <div className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card transition-colors duration-200 rounded-2xl shadow-md border border-surface-100 px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center text-center" style={{ pointerEvents: isRevealed ? 'none' : 'auto' }}>
-            {/* Top Badge */}
-            <div className="absolute top-6 left-0 right-0 flex justify-center">
-              <Badge variant={currentWord.level}>{currentWord.level}</Badge>
+          <div
+            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card rounded-2xl shadow-md border border-border px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center justify-between text-center"
+            style={{ pointerEvents: isRevealed ? 'none' : 'auto' }}
+          >
+            {/* Header info */}
+            <div className="w-full flex items-center justify-between text-xs text-muted-foreground">
+              <span>{getWordFolderLabels(currentWord)}</span>
+              <div className="flex items-center gap-1.5">
+                <Badge variant={currentWord.level}>{currentWord.level}</Badge>
+                <Badge variant={getStatusLabel(currentWord.learning_state.mastery) as any}>
+                  {getStatusLabel(currentWord.learning_state.mastery)}
+                </Badge>
+              </div>
             </div>
 
             {/* English Word */}
-            <div className="flex-1 flex flex-col justify-center items-center w-full mt-6">
-              <h2 className="text-4xl sm:text-5xl font-bold text-surface-900 mb-8 break-words w-full">
+            <div className="flex-1 flex flex-col justify-center items-center w-full py-6">
+              <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground break-words w-full">
                 {currentWord.word}
               </h2>
-              <Button variant="secondary" onClick={() => setIsRevealed(true)} className="px-8 py-3">
+              {currentWord.part_of_speech && (
+                <span className="text-sm text-muted-foreground font-medium italic mt-2">
+                  ({currentWord.part_of_speech})
+                </span>
+              )}
+            </div>
+
+            {/* Flip Action */}
+            <div className="w-full flex flex-col items-center gap-2 pt-2">
+              <Button
+                variant="primary"
+                size="lg"
+                onClick={() => setIsRevealed(true)}
+                className="w-full sm:w-auto px-8 py-2.5 font-semibold shadow-xs"
+              >
                 SHOW ANSWER
               </Button>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <Keyboard className="h-3 w-3" /> Press <strong className="font-semibold text-foreground">Space</strong> to flip
+              </span>
             </div>
           </div>
 
           {/* BACK FACE */}
-          <div className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card transition-colors duration-200 rounded-2xl shadow-md border border-surface-100 px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center text-center" style={{ pointerEvents: isRevealed ? 'auto' : 'none' }}>
-            
-            {/* English Word (Small) */}
-            <h3 className="text-lg font-medium text-surface-400 mb-6">{currentWord.word}</h3>
-            
+          <div
+            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-2xl shadow-md border border-border px-6 py-6 sm:px-10 sm:py-7 flex flex-col items-center text-center"
+            style={{ pointerEvents: isRevealed ? 'auto' : 'none' }}
+          >
+            {/* Word Header */}
+            <div className="w-full flex items-center justify-between border-b border-border pb-3 mb-4 text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground text-sm">{currentWord.word}</span>
+              <Badge variant={currentWord.level}>{currentWord.level}</Badge>
+            </div>
+
+            {/* Scrollable details */}
             <div className="flex-1 w-full min-h-0 overflow-y-auto my-auto pr-1 space-y-4 text-center overscroll-contain">
-              <p className="text-xl sm:text-2xl font-semibold text-surface-900 pb-4 border-b border-surface-100 w-full break-words">
-                {currentWord.meaning}
-              </p>
-              
+              <div className="space-y-1">
+                <p className="text-2xl font-bold text-foreground break-words">
+                  {currentWord.meaning}
+                </p>
+              </div>
+
               {(currentWord.example_sentence || currentWord.example_translation) && (
-                <div className="space-y-2 pb-2">
+                <div className="p-3.5 rounded-xl bg-secondary/50 border border-border/60 text-left space-y-1.5">
                   {currentWord.example_sentence && (
-                    <p className="text-surface-700 italic">"{currentWord.example_sentence}"</p>
+                    <p className="text-sm text-foreground font-medium italic">
+                      "{currentWord.example_sentence}"
+                    </p>
                   )}
                   {currentWord.example_translation && (
-                    <p className="text-surface-400 text-sm">"{currentWord.example_translation}"</p>
+                    <p className="text-xs text-muted-foreground">
+                      {currentWord.example_translation}
+                    </p>
                   )}
                 </div>
               )}
 
               {currentWord.notes && (
-                <p className="text-surface-500 text-xs italic mt-2">
-                  Note: {currentWord.notes}
-                </p>
+                <div className="p-2.5 rounded-lg bg-muted/40 text-left">
+                  <p className="text-xs text-muted-foreground">
+                    <strong className="text-foreground">Note:</strong> {currentWord.notes}
+                  </p>
+                </div>
               )}
             </div>
 
-            {/* Rating Buttons */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full mt-auto pt-4 flex-shrink-0">
-              <button 
+            {/* SRS Rating Buttons with Keyboard Shortcuts */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full mt-auto pt-4 border-t border-border flex-shrink-0">
+              <button
+                type="button"
                 onClick={() => handleRating('again')}
-                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-900/50"
+                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-lg font-medium text-xs transition-all bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 hover:bg-rose-500/20 active:scale-95 cursor-pointer"
               >
-                Again
+                <span className="font-bold text-sm">Again</span>
+                <span className="text-2xs opacity-70 mt-0.5">[1]</span>
               </button>
-              <button 
+
+              <button
+                type="button"
                 onClick={() => handleRating('hard')}
-                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-amber-100 text-amber-700 hover:bg-amber-200 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-900/50"
+                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-lg font-medium text-xs transition-all bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 cursor-pointer"
               >
-                Hard
+                <span className="font-bold text-sm">Hard</span>
+                <span className="text-2xs opacity-70 mt-0.5">[2]</span>
               </button>
-              <button 
+
+              <button
+                type="button"
                 onClick={() => handleRating('good')}
-                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-950/50 dark:text-green-300 dark:hover:bg-green-900/50"
+                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-lg font-medium text-xs transition-all bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/20 hover:bg-emerald-600/20 active:scale-95 cursor-pointer"
               >
-                Good
+                <span className="font-bold text-sm">Good</span>
+                <span className="text-2xs opacity-70 mt-0.5">[3]</span>
               </button>
-              <button 
+
+              <button
+                type="button"
                 onClick={() => handleRating('easy')}
-                className="px-4 py-3 rounded-lg font-medium text-sm transition-colors bg-blue-100 text-blue-700 hover:bg-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-lg font-medium text-xs transition-all bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 hover:bg-sky-500/20 active:scale-95 cursor-pointer"
               >
-                Easy
+                <span className="font-bold text-sm">Easy</span>
+                <span className="text-2xs opacity-70 mt-0.5">[4]</span>
               </button>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Meta info below card */}
-      <div className="mt-6 text-sm text-surface-400">
-        {currentWord.level} · {getStatusLabel(currentWord.learning_state.mastery)}
-      </div>
-
-      {/* Folder switcher */}
-      <div className="mt-3 relative" ref={switcherRef}>
-        <button
-          onClick={() => setFolderSwitcherOpen(!folderSwitcherOpen)}
-          className="text-xs text-surface-400 hover:text-surface-600 transition-colors"
-        >
-          Study by Folder: <span className="underline">{getActiveFolderName()}</span>
-        </button>
-        
-        {folderSwitcherOpen && (
-          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-card transition-colors duration-200 rounded-xl shadow-lg border border-surface-100 py-2 min-w-[200px] z-50">
-            <button
-              onClick={() => handleFolderSwitch(undefined)}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-50 transition-colors ${
-                !activeFolderId ? 'text-surface-900 font-medium' : 'text-surface-600'
-              }`}
-            >
-              All Words
-            </button>
-            {folders.map(f => (
-              <button
-                key={f.id}
-                onClick={() => handleFolderSwitch(f.id)}
-                className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-50 transition-colors flex items-center gap-2 ${
-                  activeFolderId === f.id ? 'text-surface-900 font-medium' : 'text-surface-600'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: f.color }} />
-                {f.name}
-              </button>
-            ))}
-            <button
-              onClick={() => handleFolderSwitch('ungrouped')}
-              className={`w-full text-left px-4 py-2 text-sm hover:bg-surface-50 transition-colors flex items-center gap-2 ${
-                activeFolderId === 'ungrouped' ? 'text-surface-900 font-medium' : 'text-surface-600'
-              }`}
-            >
-              <span className="w-2 h-2 rounded-full flex-shrink-0 bg-surface-300" />
-              Ungrouped
-            </button>
-          </div>
-        )}
-      </div>
-
-      {queue.length > 1 && (
-        <div className="mt-4 text-xs text-surface-300">
-          {queue.length - 1} more words in queue
-        </div>
-      )}
     </div>
   );
 }

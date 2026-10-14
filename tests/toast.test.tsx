@@ -82,7 +82,7 @@ describe('ErrorBoundary', () => {
     const html = renderToStaticMarkup(<ErrorFallback />);
     expect(html).toContain('Something went wrong');
     expect(html).toContain('Reload Application');
-    expect(html).toContain('Go to Dashboard');
+    expect(html).toContain('Go to Home');
     expect(html).toContain('bg-card');
   });
 });

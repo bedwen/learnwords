@@ -77,11 +77,32 @@ export interface CEFRStats {
   masteredWords: number; // mastery = 4
 }
 
-export interface DashboardSummary {
+export interface ActivityDay {
+  date: string; // 'YYYY-MM-DD'
+  count: number; // total = reviews + wordsAdded
+  reviews: number;
+  wordsAdded: number;
+}
+
+export type ReviewActivityDay = ActivityDay;
+
+export interface HomeSummary {
   totalWords: number;
   dueForReview: number;
   cefrDistribution: CEFRStats[];
+  activityDays?: ActivityDay[];
+  activeDaysLast90?: number;
+  totalContributionsLast90?: number;
+  // Backwards-compatibility fallbacks
+  activeDaysLastYear?: number;
+  totalContributionsLastYear?: number;
+  reviewActivity?: ActivityDay[];
+  activeDaysLast60?: number;
+  totalReviewsLast60?: number;
+  currentStreak?: number;
 }
+
+export type DashboardSummary = HomeSummary;
 
 export interface DetailedStats {
   totalWords: number;

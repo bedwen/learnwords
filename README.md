@@ -2,81 +2,82 @@
 **This site was created to help users memorize vocabulary using flashcards.**
 Additionally, this website was created using AI tools to help me learn to code with artificial intelligence.
 
-*LearnWords now has a dark mode feature!*
+*LearnWords supports both light and dark themes.*
 
 ---
-## **Dashboard**
+## **Home**
 
-The homepage displays word counts and “Start Studying” buttons.
-![Dashboard Page (Main Page)](imagesforreadme/dashboardpagewhiteandark.png)
-
+The Home page features a daily study hub with quick review actions, a 90-day activity calendar to track study consistency, key vocabulary metrics, and a CEFR level breakdown.
+![Home Page](imagesforreadme/home_split.png)
 
 ---
 ## **Words**
 
-The Words page lets you create groups and add words!
+The Words page lets you organize vocabulary into custom folders and manage words easily.
 
-Groups keep the words you want together. You can select specific words within a group and move them to another group, change their CEFR levels all at once, or delete them entirely.
+Folders keep related vocabulary together. You can filter words by CEFR level or learning status, search across your library, and use batch actions to move, update levels, or delete multiple words at once.
+![Vocabulary Folders](imagesforreadme/words_folders.png)
 
-If you have a word that doesn’t belong to any particular group, no problem! There’s also an “ungrouped” group for those words.
-![Groups Page](imagesforreadme/wordsmaingpage.png)
-![Words Page](imagesforreadme/wordsgrouppage.jpg)
+Inside each folder, you can view all saved words in a clean table with their CEFR level, meaning, and mastery status.
+![Words Table](imagesforreadme/words_table.png)
 
 ---
-## **Add Word**
+## **Creating Folders & Adding Words**
 
-In the word addition module, we can add the word itself, its meaning, CEFR level, part of speech, an example sentence, and its translation.
-![Add Word Page](imagesforreadme/wordaddpage.png)
+You can create custom folders with distinct colors to categorize your vocabulary by topic or learning goal.
+![Create Folder](imagesforreadme/folder_add_modal.png)
+
+In the word addition module, you can specify the target word, its meaning, CEFR level, part of speech, an example sentence, translation, notes, and assign it to multiple folders.
+![Add Word](imagesforreadme/word_add_modal.png)
 
 ---
 ## **Study**
 
-On the Study page, the flashcards display the word itself on the front and its meanings on the back. This allows users to practice memorizing vocabulary.
+On the Study page, interactive flashcards display the target word on the front and its definition, example sentences, and notes on the back.
 
-You can also see which group the word belongs to on the flashcard. By clicking the group name below the flashcard, you can switch to a different word group to study.
-
-Powered by a Spaced Repetition System (SRS), the app automatically schedules when you should review each word based on your rating (Again, Hard, Good, Easy), helping you build long-term memory effortlessly.
-![Study Page](imagesforreadme/studypagewhiteanddark.png)
-![Flashcard Page](imagesforreadme/studypage.jpg)
+Powered by a Spaced Repetition System (SRS), the app automatically schedules reviews based on your ratings (Again, Hard, Good, Easy) to build long-term retention. You can also filter your study session by specific folders and use keyboard shortcuts for effortless practice.
+![Study Page](imagesforreadme/study_split.png)
 
 ---
 ## **Statistics**
 
-On the Statistics page, we can view statistics such as the number of words, CEFR level distribution, learning status, total views, total number of correct and incorrect answers, and accuracy rate.
-![Statistics](imagesforreadme/statisticspage.png)
+The Statistics page provides insights into your learning progress, including review accuracy, total reviews, CEFR difficulty distribution, and spaced repetition mastery stages.
+![Statistics Page](imagesforreadme/statistics.png)
 
 ---
 ## **Data Management**
 
-On the Data Management page, you can easily export your word lists or import new ones directly via CSV. You can also create complete JSON backups to keep your learning progress safe and restore them anytime!
-![Data Management](imagesforreadme/datamanagementpage.png)
+On the Data Management page, you can import vocabulary in bulk from CSV spreadsheets, export word lists, and create or restore full JSON backups anytime.
+![Data Management Page](imagesforreadme/data_management.png)
 
 ---
 ## **Tech Stack**
 
-- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Lucide Icons
 - **Backend:** Node.js, Express
 - **Database:** SQLite (`better-sqlite3`)
 - **Testing:** Vitest
 
-
 ---
 ## **Installation**
+
 **Prerequisites**
 - [Node.js](https://nodejs.org/) v18 or later
 
 ---
 **Setup & Run**
-Clone repository:
 
+Clone repository:
 - `git clone https://github.com/bedwen/learnwords`
 - `cd learnwords`
-Install to packages:
+
+Install packages:
 - `npm install`
 
 **How To Start Website**
+
 To host the server locally:
 - `npm run dev`
-Go to the localhost address to open the website:
-- `Open http://localhost:5173 in your browser.`
----
+
+Open the application in your browser:
+- `http://localhost:5173`

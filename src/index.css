@@ -3,20 +3,51 @@
 @tailwind utilities;
 
 :root {
-  --color-background: 250 248 245;
-  --color-card: 255 255 255;
-  
-  --color-surface-50: 248 250 252;
-  --color-surface-100: 241 245 249;
-  --color-surface-200: 226 232 240;
-  --color-surface-300: 203 213 225;
-  --color-surface-400: 148 163 184;
-  --color-surface-500: 100 116 139;
-  --color-surface-600: 71 85 105;
-  --color-surface-700: 51 65 85;
-  --color-surface-800: 30 41 59;
-  --color-surface-900: 15 23 42;
-  --color-surface-950: 2 6 23;
+  --radius: 0.75rem;
+
+  --background: 250 248 245;
+  --foreground: 41 37 36;
+
+  --card: 255 255 255;
+  --card-foreground: 41 37 36;
+
+  --popover: 255 255 255;
+  --popover-foreground: 41 37 36;
+
+  --primary: 41 37 36;
+  --primary-foreground: 255 255 255;
+
+  --secondary: 245 242 237;
+  --secondary-foreground: 41 37 36;
+
+  --muted: 245 242 237;
+  --muted-foreground: 120 113 108;
+
+  --accent: 245 242 237;
+  --accent-foreground: 41 37 36;
+
+  --destructive: 224 109 83;
+  --destructive-foreground: 255 255 255;
+
+  --border: 231 226 217;
+  --input: 231 226 217;
+  --ring: 120 113 108;
+
+  /* Legacy variable mapping for full backwards compatibility */
+  --color-background: var(--background);
+  --color-card: var(--card);
+
+  --color-surface-50: 250 250 249;
+  --color-surface-100: 245 245 244;
+  --color-surface-200: 231 229 228;
+  --color-surface-300: 214 211 209;
+  --color-surface-400: 168 162 158;
+  --color-surface-500: 120 113 108;
+  --color-surface-600: 87 83 78;
+  --color-surface-700: 68 64 60;
+  --color-surface-800: 41 37 36;
+  --color-surface-900: 28 25 23;
+  --color-surface-950: 12 10 9;
 
   --color-accent-50: 239 246 255;
   --color-accent-100: 219 234 254;
@@ -33,28 +64,56 @@
 .dark {
   color-scheme: dark;
 
-  --color-background: 18 18 20;
-  --color-card: 27 27 31;
+  --background: 24 23 22;
+  --foreground: 234 228 220;
 
-  --color-surface-50: 39 39 42;
-  --color-surface-100: 50 50 55;
-  --color-surface-200: 68 68 75;
-  --color-surface-300: 95 95 105;
-  --color-surface-400: 161 161 170;
-  --color-surface-500: 180 180 190;
-  --color-surface-600: 212 212 216;
-  --color-surface-700: 228 228 231;
-  --color-surface-800: 244 244 245;
-  --color-surface-900: 250 250 250;
+  --card: 32 30 28;
+  --card-foreground: 234 228 220;
+
+  --popover: 32 30 28;
+  --popover-foreground: 234 228 220;
+
+  --primary: 234 228 220;
+  --primary-foreground: 24 23 22;
+
+  --secondary: 44 41 38;
+  --secondary-foreground: 234 228 220;
+
+  --muted: 44 41 38;
+  --muted-foreground: 168 162 158;
+
+  --accent: 44 41 38;
+  --accent-foreground: 234 228 220;
+
+  --destructive: 239 104 80;
+  --destructive-foreground: 255 255 255;
+
+  --border: 54 50 46;
+  --input: 54 50 46;
+  --ring: 168 162 158;
+
+  /* Legacy variable mapping for full backwards compatibility */
+  --color-background: var(--background);
+  --color-card: var(--card);
+
+  --color-surface-50: 44 41 38;
+  --color-surface-100: 54 50 46;
+  --color-surface-200: 68 64 60;
+  --color-surface-300: 87 83 78;
+  --color-surface-400: 120 113 108;
+  --color-surface-500: 168 162 158;
+  --color-surface-600: 214 211 209;
+  --color-surface-700: 231 229 228;
+  --color-surface-800: 245 245 244;
+  --color-surface-900: 250 250 249;
   --color-surface-950: 255 255 255;
 }
 
 /* Native <option> lists don't inherit Tailwind backgrounds in every browser */
 select option {
-  background-color: rgb(var(--color-card));
-  color: rgb(var(--color-surface-900));
+  background-color: rgb(var(--card));
+  color: rgb(var(--foreground));
 }
-
 
 * {
   margin: 0;
@@ -64,8 +123,8 @@ select option {
 
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background-color: rgb(var(--color-background));
-  color: rgb(var(--color-surface-900));
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.2s ease, color 0.2s ease;

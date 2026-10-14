@@ -4,7 +4,7 @@ import cors from 'cors';
 
 import wordsRouter from './routes/words';
 import studyRouter from './routes/study';
-import dashboardRouter from './routes/dashboard';
+import homeRouter from './routes/home';
 import foldersRouter from './routes/folders';
 import dataRouter from './routes/data';
 
@@ -78,7 +78,8 @@ export function createApp(): express.Express {
 
   app.use('/api/words', wordsRouter);
   app.use('/api/study', studyRouter);
-  app.use('/api/dashboard', dashboardRouter);
+  app.use('/api/home', homeRouter);
+  app.use('/api/dashboard', homeRouter);
   app.use('/api/folders', foldersRouter);
   app.use('/api/data', dataRouter);
 

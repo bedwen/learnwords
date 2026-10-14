@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, GraduationCap, Plus } from 'lucide-react';
 import { WordWithState, Folder, FolderListResponse, CEFRLevel } from '../types';
 import {
   getWords,
@@ -396,25 +397,31 @@ export function Words() {
           {/* Top Bar */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center gap-3">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={goBack}
-                className="text-surface-400 hover:text-surface-900 transition-colors flex items-center gap-1 text-sm"
+                className="gap-1.5 text-muted-foreground hover:text-foreground h-9 px-2.5"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                Back
-              </button>
-              <h1 className="text-2xl font-bold text-surface-900">{activeFolderName}</h1>
+                <ArrowLeft className="h-4 w-4" />
+                <span>Folders</span>
+              </Button>
+              <div className="h-5 w-px bg-border hidden sm:block" />
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">{activeFolderName}</h1>
             </div>
-            <div className="flex gap-3">
+            <div className="flex items-center gap-2.5">
               <Button
                 variant="secondary"
+                className="gap-1.5"
                 onClick={() => navigate(activeFolderId ? `/study?folderId=${activeFolderId}` : '/study')}
               >
-                Study Now
+                <GraduationCap className="h-4 w-4" />
+                <span>Study Folder</span>
               </Button>
-              <Button onClick={handleAddWordClick}>Add Word</Button>
+              <Button onClick={handleAddWordClick} className="gap-1.5 shadow-sm">
+                <Plus className="h-4 w-4" />
+                <span>Add Word</span>
+              </Button>
             </div>
           </div>
 

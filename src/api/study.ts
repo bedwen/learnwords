@@ -20,6 +20,7 @@ export async function submitReview(wordId: string, rating: ReviewRating): Promis
     body: JSON.stringify({ wordId, rating }),
   });
   if (!res.ok) throw new Error('Failed to submit review');
+  clearCache('home');
   clearCache('dashboard');
   clearCache('detailed_stats');
   return res.json();
