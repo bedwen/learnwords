@@ -1,23 +1,23 @@
 import { Router } from 'express';
-import { DashboardService } from '../services/dashboard';
+import { HomeService } from '../services/home';
 
 const router = Router();
 
-// GET /api/dashboard/summary
+// GET /api/home/summary (and /api/dashboard/summary)
 router.get('/summary', (_req, res) => {
   try {
-    const summary = DashboardService.getDashboardSummary();
+    const summary = HomeService.getHomeSummary();
     res.json(summary);
   } catch (error) {
-    console.error('Error fetching dashboard summary:', error);
+    console.error('Error fetching home summary:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /api/dashboard/detailed
+// GET /api/home/detailed (and /api/dashboard/detailed)
 router.get('/detailed', (_req, res) => {
   try {
-    const stats = DashboardService.getDetailedStats();
+    const stats = HomeService.getDetailedStats();
     res.json(stats);
   } catch (error) {
     console.error('Error fetching detailed stats:', error);

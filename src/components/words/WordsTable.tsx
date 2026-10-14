@@ -1,6 +1,16 @@
 import { useEffect, useRef } from 'react';
+import { Pencil, FolderMinus, Trash2, BookOpen } from 'lucide-react';
 import { WordWithState } from '../../types';
 import { Badge } from '../ui/Badge';
+import { Button } from '../ui/Button';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '../ui/Table';
 
 interface WordsTableProps {
   words: WordWithState[];
@@ -16,7 +26,7 @@ interface WordsTableProps {
 }
 
 const checkboxClass =
-  'h-4 w-4 rounded border-surface-300 accent-surface-900 cursor-pointer align-middle';
+  'h-4 w-4 rounded border-input bg-card text-primary focus:ring-ring focus:ring-2 cursor-pointer align-middle transition-colors';
 
 export function WordsTable({
   words,
@@ -46,49 +56,58 @@ export function WordsTable({
   };
 
   return (
-    <div className="bg-card transition-colors duration-200 rounded-xl shadow-sm border border-surface-100 overflow-hidden">
+    <div className="bg-card rounded-xl shadow-xs border border-border overflow-hidden">
       {error ? (
-        <div className="p-8 text-center text-red-600">{error}</div>
+        <div className="p-8 text-center text-destructive font-medium">{error}</div>
       ) : loading && words.length === 0 ? (
-        <div className="p-8 text-center text-surface-500">Loading...</div>
+        <div className="p-12 text-center text-muted-foreground animate-pulse">
+          Loading vocabulary...
+        </div>
       ) : words.length === 0 ? (
-        <div className="p-12 text-center text-surface-500">
-          <p>No words found.</p>
+        <div className="p-16 text-center space-y-3">
+          <div className="mx-auto w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-muted-foreground">
+            <BookOpen className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-semibold text-foreground">No words found</h3>
+          <p className="text-sm text-muted-foreground max-w-sm mx-auto">
+            Try adjusting your search criteria or add new words to start learning.
+          </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-surface-50 text-surface-500 border-b border-surface-100">
-              <tr>
-                <th className="pl-6 pr-2 py-4 w-10">
-                  <input
-                    id="words-select-all"
-                    ref={headerCheckboxRef}
-                    type="checkbox"
-                    className={checkboxClass}
-                    checked={allSelected}
-                    onChange={onToggleSelectAll}
-                    aria-label="Select all words"
-                  />
-                </th>
-                <th className="px-6 py-4 font-medium">Word</th>
-                <th className="px-6 py-4 font-medium">CEFR Level</th>
-                <th className="px-6 py-4 font-medium">Meaning</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-surface-100">
-              {words.map((word) => {
-                const isSelected = selectedWordIds.has(word.id);
-                return (
-                <tr
+        <Table>
+          <TableHeader className="bg-secondary/40">
+            <TableRow>
+              <TableHead className="pl-6 pr-2 py-3.5 w-10">
+                <input
+                  id="words-select-all"
+                  ref={headerCheckboxRef}
+                  type="checkbox"
+                  className={checkboxClass}
+                  checked={allSelected}
+                  onChange={onToggleSelectAll}
+                  aria-label="Select all words"
+                />
+              </TableHead>
+              <TableHead className="px-6 py-3.5 font-semibold text-foreground">Word</TableHead>
+              <TableHead className="px-6 py-3.5 font-semibold text-foreground">Level</TableHead>
+              <TableHead className="px-6 py-3.5 font-semibold text-foreground">Meaning</TableHead>
+              <TableHead className="px-6 py-3.5 font-semibold text-foreground">Status</TableHead>
+              <TableHead className="px-6 py-3.5 font-semibold text-foreground text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {words.map((word) => {
+              const isSelected = selectedWordIds.has(word.id);
+              const statusLabel = getStatusLabel(word.learning_state.mastery);
+
+              return (
+                <TableRow
                   key={word.id}
                   className={`transition-colors ${
-                    isSelected ? 'bg-surface-50/70 dark:bg-surface-800/40' : 'hover:bg-surface-50/50'
+                    isSelected ? 'bg-secondary/60' : 'hover:bg-secondary/30'
                   }`}
                 >
-                  <td className="pl-6 pr-2 py-4 w-10">
+                  <TableCell className="pl-6 pr-2 py-3.5 w-10">
                     <input
                       id={`word-select-${word.id}`}
                       type="checkbox"
@@ -97,45 +116,71 @@ export function WordsTable({
                       onChange={() => onToggleSelect(word.id)}
                       aria-label={`Select ${word.word}`}
                     />
-                  </td>
-                  <td className="px-6 py-4 font-medium text-surface-900">{word.word}</td>
-                  <td className="px-6 py-4">
-                    <Badge variant={word.level}>{word.level}</Badge>
-                  </td>
-                  <td className="px-6 py-4 text-surface-600">{word.meaning}</td>
-                  <td className="px-6 py-4">
-                    <Badge variant={getStatusLabel(word.learning_state.mastery) as any}>
-                      {getStatusLabel(word.learning_state.mastery)}
+                  </TableCell>
+                  <TableCell className="px-6 py-3.5 font-semibold text-foreground">
+                    <div className="flex items-center gap-2">
+                      <span>{word.word}</span>
+                      {word.part_of_speech && (
+                        <span className="text-xs text-muted-foreground font-normal italic">
+                          ({word.part_of_speech})
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="px-6 py-3.5">
+                    <Badge variant={word.level} className="font-semibold text-xs">
+                      {word.level}
                     </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => onEditWord(word)}
-                      className="text-surface-400 hover:text-surface-900 mx-2 transition-colors"
-                    >
-                      Edit
-                    </button>
-                    {!isUngrouped && (
-                      <button
-                        onClick={() => onRemoveFromFolder(word)}
-                        className="text-surface-400 hover:text-amber-600 mx-2 transition-colors"
+                  </TableCell>
+                  <TableCell className="px-6 py-3.5 text-muted-foreground font-medium max-w-xs truncate">
+                    {word.meaning}
+                  </TableCell>
+                  <TableCell className="px-6 py-3.5">
+                    <Badge variant={statusLabel as any}>
+                      {statusLabel}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-6 py-3.5 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEditWord(word)}
+                        className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                        title="Edit word"
                       >
-                        Remove
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onDeleteWord(word)}
-                      className="text-surface-400 hover:text-red-600 mx-2 transition-colors"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        <Pencil className="h-3.5 w-3.5" />
+                        <span className="ml-1 text-xs">Edit</span>
+                      </Button>
+                      {!isUngrouped && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onRemoveFromFolder(word)}
+                          className="h-8 px-2 text-muted-foreground hover:text-amber-600"
+                          title="Remove from folder"
+                        >
+                          <FolderMinus className="h-3.5 w-3.5" />
+                          <span className="ml-1 text-xs">Remove</span>
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDeleteWord(word)}
+                        className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                        title="Delete word"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span className="ml-1 text-xs">Delete</span>
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       )}
     </div>
   );

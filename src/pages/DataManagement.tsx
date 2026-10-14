@@ -1,14 +1,38 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { exportData, importData, importWordsCsv, exportWordsCsv as apiExportWordsCsv, ExportData, CsvImportResult } from '../api/data';
+import {
+  Upload,
+  Download,
+  FileSpreadsheet,
+  Database,
+  AlertTriangle,
+  FileJson,
+  CheckCircle2,
+} from 'lucide-react';
+import Papa from 'papaparse';
+import {
+  exportData,
+  importData,
+  importWordsCsv,
+  exportWordsCsv as apiExportWordsCsv,
+  ExportData,
+  CsvImportResult,
+} from '../api/data';
 import { getFolders } from '../api/folders';
 import { Folder } from '../types';
-import Papa from 'papaparse';
+import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
+import { Select } from '../components/ui/Select';
+import { Modal } from '../components/ui/Modal';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
+import { Badge } from '../components/ui/Badge';
 
 export function DataManagement() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  
+
   // JSON Backup Restore state
   const [importFileData, setImportFileData] = useState<ExportData | null>(null);
   const [confirmReplaceText, setConfirmReplaceText] = useState('');
@@ -16,7 +40,7 @@ export function DataManagement() {
 
   // CSV Import state
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvPreview, setCsvPreview] = useState<{ total: number, sample: any[] } | null>(null);
+  const [csvPreview, setCsvPreview] = useState<{ total: number; sample: any[] } | null>(null);
   const [csvResult, setCsvResult] = useState<CsvImportResult | null>(null);
   const csvFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -27,10 +51,12 @@ export function DataManagement() {
   const [isExportingCsv, setIsExportingCsv] = useState(false);
 
   useEffect(() => {
-    getFolders().then(res => {
-      setFolders(res.folders);
-      setUngroupedCount(res.ungroupedCount);
-    }).catch(() => {});
+    getFolders()
+      .then((res) => {
+        setFolders(res.folders);
+        setUngroupedCount(res.ungroupedCount);
+      })
+      .catch(() => {});
   }, []);
 
   // --- Export JSON ---
@@ -39,7 +65,7 @@ export function DataManagement() {
       setError(null);
       setSuccess(null);
       const data = await exportData();
-      
+
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -47,7 +73,7 @@ export function DataManagement() {
       a.download = `learnwords-backup-${new Date().toISOString().split('T')[0]}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      setSuccess('Data exported successfully.');
+      setSuccess('Database backup exported successfully.');
     } catch (err: any) {
       setError(err.message || 'An error occurred during export.');
     }
@@ -66,14 +92,14 @@ export function DataManagement() {
         setImportFileData(data);
         setConfirmReplaceText('');
       } catch (err) {
-        setError('Invalid JSON file format.');
+        setError('Invalid JSON backup file format.');
       }
     };
     reader.onerror = () => {
-      setError('Failed to read file.');
+      setError('Failed to read backup file.');
     };
     reader.readAsText(file);
-    
+
     if (jsonFileInputRef.current) {
       jsonFileInputRef.current.value = '';
     }
@@ -81,13 +107,13 @@ export function DataManagement() {
 
   const confirmJsonImport = async () => {
     if (!importFileData || confirmReplaceText !== 'REPLACE') return;
-    
+
     setIsProcessing(true);
     setError(null);
     setSuccess(null);
     try {
       await importData(importFileData);
-      setSuccess('Data imported successfully.');
+      setSuccess('Data imported successfully. Reloading application...');
       setImportFileData(null);
       setTimeout(() => {
         window.location.reload();
@@ -118,14 +144,14 @@ export function DataManagement() {
         }
         setCsvPreview({
           total: parsed.data.length,
-          sample: parsed.data.slice(0, 5)
+          sample: parsed.data.slice(0, 5),
         });
       } catch (err) {
         setError('Failed to parse CSV file.');
       }
     };
     reader.readAsText(file);
-    
+
     if (csvFileInputRef.current) {
       csvFileInputRef.current.value = '';
     }
@@ -133,7 +159,7 @@ export function DataManagement() {
 
   const confirmCsvImport = async () => {
     if (!csvFile) return;
-    
+
     setIsProcessing(true);
     setError(null);
     setSuccess(null);
@@ -145,7 +171,7 @@ export function DataManagement() {
         setCsvFile(null);
         setCsvPreview(null);
       } else {
-        setError('Import failed.');
+        setError('CSV Import failed.');
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during CSV import.');
@@ -159,9 +185,9 @@ export function DataManagement() {
       setIsExportingCsv(true);
       setError(null);
       setSuccess(null);
-      
+
       const { blob, filename } = await apiExportWordsCsv(selectedFolderId);
-      
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -177,224 +203,308 @@ export function DataManagement() {
   };
 
   return (
-    <div className="py-8 max-w-2xl mx-auto">
-      <h1 className="text-3xl font-light text-surface-900 mb-8">Data Management</h1>
-      
+    <div className="py-4 max-w-4xl mx-auto space-y-6">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+          Data Management
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Import and export your vocabulary and download complete JSON backups
+        </p>
+      </div>
+
       {error && (
-        <div className="mb-6 p-4 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 rounded-md whitespace-pre-line">
-          {error}
+        <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-sm flex items-start gap-2.5">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div className="whitespace-pre-line">{error}</div>
         </div>
       )}
+
       {success && (
-        <div className="mb-6 p-4 bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300 rounded-md">
-          {success}
+        <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-sm flex items-start gap-2.5">
+          <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+          <div>{success}</div>
         </div>
       )}
 
-      {/* 1. Import Words (CSV) */}
-      <div className="bg-card transition-colors duration-200 rounded-lg shadow-sm border border-surface-200 overflow-hidden mb-6">
-        <div className="p-6 border-b border-surface-200">
-          <h2 className="text-xl font-medium text-surface-900 mb-2">Import Words (CSV)</h2>
-          <p className="text-surface-600 mb-4">
-            Add new words from a CSV file. The file must contain headers: word, meaning, level (Optional: part_of_speech, example_sentence, example_translation, notes).
-          </p>
-          <input
-            type="file"
-            accept=".csv"
-            ref={csvFileInputRef}
-            className="hidden"
-            onChange={handleCsvSelect}
-          />
-          <button
-            onClick={() => csvFileInputRef.current?.click()}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-          >
-            Select CSV File
-          </button>
+      <Tabs defaultValue="csv" className="space-y-6">
+        <TabsList className="grid w-full sm:w-80 grid-cols-2">
+          <TabsTrigger value="csv" className="gap-2">
+            <FileSpreadsheet className="h-4 w-4" />
+            <span>CSV Data</span>
+          </TabsTrigger>
+          <TabsTrigger value="backup" className="gap-2">
+            <Database className="h-4 w-4" />
+            <span>Full Backup</span>
+          </TabsTrigger>
+        </TabsList>
 
-          {csvResult && !csvResult.success && csvResult.errors.length > 0 && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 dark:bg-red-950/40 dark:border-red-900/60 rounded">
-              <h3 className="font-medium text-red-800 dark:text-red-300 mb-2">Import Errors:</h3>
-              <ul className="list-disc pl-5 text-sm text-red-700 dark:text-red-300 space-y-1">
-                {csvResult.errors.map((e, i) => (
-                  <li key={i}>{e}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
+        {/* CSV Tab */}
+        <TabsContent value="csv" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Import CSV Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Upload className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-base font-semibold">Import Vocabulary</CardTitle>
+                </div>
+                <CardDescription>
+                  Upload vocabulary in bulk from a CSV file
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Required columns: <strong className="text-foreground">word, meaning, level</strong>.
+                  Optional: <em>part_of_speech, example_sentence, example_translation, notes</em>.
+                </p>
 
-      {/* 2. Export Words (CSV) */}
-      <div className="bg-card transition-colors duration-200 rounded-lg shadow-sm border border-surface-200 overflow-hidden mb-6">
-        <div className="p-6 border-b border-surface-200">
-          <h2 className="text-xl font-medium text-surface-900 mb-2">Export Words (CSV)</h2>
-          <p className="text-surface-600 mb-4">
-            Download your words as a CSV file. You can export all words, ungrouped words, or words from a specific folder.
-          </p>
-          
-          <div className="flex items-center space-x-4">
-            <select
-              value={selectedFolderId}
-              onChange={(e) => setSelectedFolderId(e.target.value)}
-              className="px-3 py-2 border border-surface-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-card transition-colors duration-200"
-              disabled={isExportingCsv}
-            >
-              <option value="">All Words</option>
-              <option value="ungrouped">Ungrouped ({ungroupedCount} words)</option>
-              {folders.map(f => (
-                <option key={f.id} value={f.id}>{f.name} ({f.wordCount} words)</option>
-              ))}
-            </select>
-            
-            <button
-              onClick={handleCsvExport}
-              disabled={isExportingCsv}
-              className="px-4 py-2 bg-surface-900 text-card rounded hover:bg-surface-800 transition-colors disabled:opacity-50"
-            >
-              {isExportingCsv ? 'Exporting...' : 'Export as CSV'}
-            </button>
+                <input
+                  type="file"
+                  accept=".csv"
+                  ref={csvFileInputRef}
+                  className="hidden"
+                  onChange={handleCsvSelect}
+                />
+
+                <Button
+                  onClick={() => csvFileInputRef.current?.click()}
+                  className="w-full gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>Choose CSV File</span>
+                </Button>
+
+                {csvResult && !csvResult.success && csvResult.errors.length > 0 && (
+                  <div className="mt-4 p-3.5 bg-destructive/10 border border-destructive/20 rounded-lg text-xs space-y-1">
+                    <p className="font-semibold text-destructive">Import Errors:</p>
+                    <ul className="list-disc pl-4 space-y-0.5 text-destructive">
+                      {csvResult.errors.map((e, i) => (
+                        <li key={i}>{e}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Export CSV Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Download className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-base font-semibold">Export Vocabulary</CardTitle>
+                </div>
+                <CardDescription>
+                  Download vocabulary as a formatted CSV spreadsheet
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Select whether to export all words, ungrouped words, or words belonging to a specific folder.
+                </p>
+
+                <div className="space-y-3">
+                  <Select
+                    value={selectedFolderId}
+                    onChange={(e) => setSelectedFolderId(e.target.value)}
+                    disabled={isExportingCsv}
+                    options={[
+                      { value: '', label: 'All Words' },
+                      { value: 'ungrouped', label: `Ungrouped (${ungroupedCount} words)` },
+                      ...folders.map((f) => ({
+                        value: f.id,
+                        label: `${f.name} (${f.wordCount} words)`,
+                      })),
+                    ]}
+                  />
+
+                  <Button
+                    variant="secondary"
+                    onClick={handleCsvExport}
+                    disabled={isExportingCsv}
+                    className="w-full gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>{isExportingCsv ? 'Exporting...' : 'Export as CSV'}</span>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </div>
-      </div>
+        </TabsContent>
 
-      {/* 3. Export Personal Data (JSON) */}
-      <div className="bg-card transition-colors duration-200 rounded-lg shadow-sm border border-surface-200 overflow-hidden mb-6">
-        <div className="p-6">
-          <h2 className="text-xl font-medium text-surface-900 mb-2">Export Backup</h2>
-          <p className="text-surface-600 mb-4">
-            Download a complete backup of all your personal data including review history and learning progress.
-          </p>
-          <button
-            onClick={handleExport}
-            className="px-4 py-2 bg-surface-900 text-card rounded hover:bg-surface-800 transition-colors"
-          >
-            Download Backup (JSON)
-          </button>
-        </div>
-      </div>
+        {/* Full Backup JSON Tab */}
+        <TabsContent value="backup" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Export JSON Backup */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <FileJson className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-base font-semibold">Download Backup</CardTitle>
+                </div>
+                <CardDescription>
+                  Create an offline snapshot of your complete vocabulary data
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Includes all words, learning history, spaced-repetition parameters, and custom folders.
+                </p>
 
-      {/* 4. Restore Backup (JSON) */}
-      <div className="bg-card transition-colors duration-200 rounded-lg shadow-sm border border-surface-200 overflow-hidden opacity-90">
-        <div className="p-6">
-          <h2 className="text-xl font-medium text-red-800 dark:text-red-400 mb-2 flex items-center">
-            <span className="mr-2">⚠️</span> Restore Backup
-          </h2>
-          <p className="text-surface-600 mb-4 text-sm">
-            Restore a previous backup. This will replace all your current data. Use with caution.
-          </p>
-          <input
-            type="file"
-            accept=".json"
-            ref={jsonFileInputRef}
-            className="hidden"
-            onChange={handleJsonSelect}
-          />
-          <button
-            onClick={() => jsonFileInputRef.current?.click()}
-            className="px-4 py-2 border border-red-300 text-red-700 rounded hover:bg-red-50 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/40 transition-colors text-sm"
-          >
-            Restore from Backup (JSON)
-          </button>
-        </div>
-      </div>
+                <Button
+                  onClick={handleExport}
+                  className="w-full gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span>Download Backup (JSON)</span>
+                </Button>
+              </CardContent>
+            </Card>
 
-      {/* CSV Preview Modal */}
-      {csvPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card transition-colors duration-200 rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-medium text-surface-900 mb-2">Confirm Word Import</h3>
-            <p className="text-surface-600 mb-4">
-              Found <strong>{csvPreview.total}</strong> words in the file. Existing words will be skipped.
-            </p>
-            
-            <div className="mb-6 border rounded overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-surface-50 text-surface-600 border-b">
-                  <tr>
-                    <th className="px-4 py-2">Word</th>
-                    <th className="px-4 py-2">Meaning</th>
-                    <th className="px-4 py-2">Level</th>
-                  </tr>
-                </thead>
-                <tbody>
+            {/* Restore JSON Backup */}
+            <Card className="border-destructive/30 bg-card">
+              <CardHeader>
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  <CardTitle className="text-base font-semibold">Restore Backup</CardTitle>
+                </div>
+                <CardDescription>
+                  Overwrite the local database from a previous JSON backup
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Warning: Restoring will overwrite existing words and review records.
+                </p>
+
+                <input
+                  type="file"
+                  accept=".json"
+                  ref={jsonFileInputRef}
+                  className="hidden"
+                  onChange={handleJsonSelect}
+                />
+
+                <Button
+                  variant="danger"
+                  onClick={() => jsonFileInputRef.current?.click()}
+                  className="w-full gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  <span>Select Backup File (JSON)</span>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* CSV Preview Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(csvPreview)}
+        onClose={() => {
+          setCsvPreview(null);
+          setCsvFile(null);
+        }}
+        title="Confirm Vocabulary Import"
+        description={`Found ${csvPreview?.total || 0} words in the CSV file. Existing words will be skipped.`}
+      >
+        <div className="space-y-5">
+          {csvPreview && (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <Table>
+                <TableHeader className="bg-secondary/40">
+                  <TableRow>
+                    <TableHead className="text-xs font-semibold">Word</TableHead>
+                    <TableHead className="text-xs font-semibold">Meaning</TableHead>
+                    <TableHead className="text-xs font-semibold">Level</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {csvPreview.sample.map((row, i) => (
-                    <tr key={i} className="border-b last:border-0">
-                      <td className="px-4 py-2">{row.word || '-'}</td>
-                      <td className="px-4 py-2">{row.meaning || '-'}</td>
-                      <td className="px-4 py-2">{row.level || '-'}</td>
-                    </tr>
+                    <TableRow key={i}>
+                      <TableCell className="font-medium text-xs">{row.word || '-'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.meaning || '-'}</TableCell>
+                      <TableCell className="text-xs">
+                        <Badge variant={row.level as any}>{row.level || '-'}</Badge>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               {csvPreview.total > 5 && (
-                <div className="p-2 text-center text-surface-500 text-sm bg-surface-50">
+                <div className="p-2.5 text-center text-xs text-muted-foreground bg-muted/40 border-t border-border">
                   ...and {csvPreview.total - 5} more words
                 </div>
               )}
             </div>
+          )}
 
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => { setCsvPreview(null); setCsvFile(null); }}
-                disabled={isProcessing}
-                className="px-4 py-2 text-surface-600 hover:text-surface-900 font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmCsvImport}
-                disabled={isProcessing}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium"
-              >
-                {isProcessing ? 'Importing...' : 'Confirm Import'}
-              </button>
-            </div>
+          <div className="flex justify-end gap-2.5 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setCsvPreview(null);
+                setCsvFile(null);
+              }}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmCsvImport}
+              disabled={isProcessing}
+            >
+              {isProcessing ? 'Importing...' : 'Confirm Import'}
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {/* JSON Restore Modal */}
-      {importFileData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-card transition-colors duration-200 rounded-lg max-w-md w-full p-6">
-            <h3 className="text-xl font-medium text-red-600 mb-4 flex items-center">
-              <span className="mr-2">⚠️</span> Danger Zone
-            </h3>
-            <p className="text-surface-600 mb-4">
-              This will <strong>DELETE all current data</strong> and replace it with the backup. This cannot be undone.
-            </p>
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-surface-700 mb-2">
-                Type <span className="font-bold">REPLACE</span> to confirm:
-              </label>
-              <input
-                type="text"
-                value={confirmReplaceText}
-                onChange={(e) => setConfirmReplaceText(e.target.value)}
-                className="w-full px-3 py-2 bg-background border border-surface-300 rounded focus:outline-none focus:ring-1 focus:ring-red-500 transition-colors duration-200"
-                placeholder="REPLACE"
-              />
-            </div>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setImportFileData(null)}
-                disabled={isProcessing}
-                className="px-4 py-2 text-surface-600 hover:text-surface-900 font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmJsonImport}
-                disabled={isProcessing || confirmReplaceText !== 'REPLACE'}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 transition-colors font-medium"
-              >
-                {isProcessing ? 'Restoring...' : 'Restore Backup'}
-              </button>
-            </div>
+      {/* JSON Restore Confirmation Modal */}
+      <Modal
+        isOpen={Boolean(importFileData)}
+        onClose={() => setImportFileData(null)}
+        title="Restore Backup Confirmation"
+        description="This operation will replace your current vocabulary database with the uploaded backup file."
+      >
+        <div className="space-y-5">
+          <div className="p-3.5 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive space-y-1">
+            <p className="font-semibold">Irreversible Action</p>
+            <p>All existing local words, folders, and review records will be replaced.</p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              Type <strong className="text-foreground">REPLACE</strong> to confirm:
+            </label>
+            <Input
+              value={confirmReplaceText}
+              onChange={(e) => setConfirmReplaceText(e.target.value)}
+              placeholder="REPLACE"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2.5 pt-2">
+            <Button
+              variant="secondary"
+              onClick={() => setImportFileData(null)}
+              disabled={isProcessing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmJsonImport}
+              disabled={isProcessing || confirmReplaceText !== 'REPLACE'}
+            >
+              {isProcessing ? 'Restoring...' : 'Confirm Restore'}
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

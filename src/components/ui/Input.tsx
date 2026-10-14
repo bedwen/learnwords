@@ -1,28 +1,40 @@
 import React, { forwardRef } from 'react';
+import { cn } from '../../lib/utils';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  leftIcon?: React.ReactNode;
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className = '', ...props }, ref) => {
+  ({ label, error, leftIcon, className = '', ...props }, ref) => {
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 w-full">
         {label && (
-          <label className="text-sm font-medium text-surface-700">
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {label}
-            {props.required && <span className="text-red-500 ml-1">*</span>}
+            {props.required && <span className="text-destructive ml-1">*</span>}
           </label>
         )}
-        <input
-          ref={ref}
-          className={`px-3 py-2 bg-card transition-colors duration-200 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-surface-900 focus:border-transparent transition-shadow ${
-            error ? 'border-red-300 focus:ring-red-500' : ''
-          } ${className}`}
-          {...props}
-        />
-        {error && <span className="text-xs text-red-500">{error}</span>}
+        <div className="relative flex items-center">
+          {leftIcon && (
+            <div className="absolute left-3 flex items-center pointer-events-none text-muted-foreground">
+              {leftIcon}
+            </div>
+          )}
+          <input
+            ref={ref}
+            className={cn(
+              'flex h-9 w-full rounded-lg border border-input bg-card px-3 py-1 text-sm shadow-xs transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 text-foreground',
+              leftIcon && 'pl-9',
+              error && 'border-destructive focus-visible:ring-destructive',
+              className
+            )}
+            {...props}
+          />
+        </div>
+        {error && <span className="text-xs text-destructive">{error}</span>}
       </div>
     );
   }

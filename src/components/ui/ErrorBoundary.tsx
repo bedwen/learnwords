@@ -19,12 +19,12 @@ export function ErrorFallback() {
         <h2 className="text-xl font-semibold text-surface-900">Something went wrong</h2>
         <p className="text-sm text-surface-600">
           An unexpected error occurred while displaying this page. Your saved words and study progress are safe.
-          You can reload the application or return to the dashboard.
+          You can reload the application or return to the home page.
         </p>
         <div className="flex flex-col sm:flex-row justify-center gap-3 pt-2">
           <Button onClick={() => window.location.reload()}>Reload Application</Button>
-          <Button variant="secondary" onClick={() => window.location.assign('/dashboard')}>
-            Go to Dashboard
+          <Button variant="secondary" onClick={() => window.location.assign('/')}>
+            Go to Home
           </Button>
         </div>
       </div>

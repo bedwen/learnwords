@@ -35,6 +35,7 @@ export async function createWord(data: CreateWordDto): Promise<WordWithState> {
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to create word');
+  clearCache('home');
   clearCache('dashboard');
   clearCache('words');
   clearCache('folders');
@@ -48,6 +49,7 @@ export async function updateWord(id: string, data: UpdateWordDto): Promise<WordW
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error('Failed to update word');
+  clearCache('home');
   clearCache('dashboard');
   clearCache('words');
   clearCache('folders');
@@ -57,6 +59,7 @@ export async function updateWord(id: string, data: UpdateWordDto): Promise<WordW
 export async function deleteWord(id: string): Promise<void> {
   const res = await fetch(`${API_BASE}/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete word');
+  clearCache('home');
   clearCache('dashboard');
   clearCache('words');
   clearCache('folders');
@@ -92,6 +95,7 @@ export async function batchUpdateCefr(
     'Failed to update CEFR level'
   );
   clearCache('words');
+  clearCache('home');
   clearCache('dashboard');
   return result;
 }
@@ -104,6 +108,7 @@ export async function batchDeleteWords(wordIds: string[]): Promise<{ success: bo
   );
   clearCache('words');
   clearCache('folders');
+  clearCache('home');
   clearCache('dashboard');
   return result;
 }

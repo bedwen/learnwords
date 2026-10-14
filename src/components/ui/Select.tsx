@@ -1,36 +1,47 @@
 import React, { forwardRef } from 'react';
+import { cn } from '../../lib/utils';
+import { ChevronDown } from 'lucide-react';
 
-interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+export interface SelectOption {
+  value: string;
+  label: string;
+}
+
+export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   label?: string;
-  options: { value: string; label: string }[];
+  options: SelectOption[];
   error?: string;
 }
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ label, options, error, className = '', ...props }, ref) => {
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 w-full">
         {label && (
-          <label className="text-sm font-medium text-surface-700">
+          <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {label}
-            {props.required && <span className="text-red-500 ml-1">*</span>}
+            {props.required && <span className="text-destructive ml-1">*</span>}
           </label>
         )}
-        <select
-          ref={ref}
-          className={`px-3 py-2 bg-card transition-colors duration-200 border border-surface-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-surface-900 focus:border-transparent transition-shadow appearance-none ${
-            error ? 'border-red-300 focus:ring-red-500' : ''
-          } ${className}`}
-          style={{ backgroundImage: 'url("data:image/svg+xml,%3csvg xmlns=\'http://www.w3.org/2000/svg\' fill=\'none\' viewBox=\'0 0 20 20\'%3e%3cpath stroke=\'%236b7280\' stroke-linecap=\'round\' stroke-linejoin=\'round\' stroke-width=\'1.5\' d=\'M6 8l4 4 4-4\'/%3e%3c/svg%3e")', backgroundPosition: 'right 0.5rem center', backgroundRepeat: 'no-repeat', backgroundSize: '1.5em 1.5em', paddingRight: '2.5rem' }}
-          {...props}
-        >
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        {error && <span className="text-xs text-red-500">{error}</span>}
+        <div className="relative flex items-center">
+          <select
+            ref={ref}
+            className={cn(
+              'flex h-9 w-full appearance-none rounded-lg border border-input bg-card px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50 pr-8 text-foreground',
+              error && 'border-destructive focus-visible:ring-destructive',
+              className
+            )}
+            {...props}
+          >
+            {options.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown className="absolute right-2.5 h-4 w-4 pointer-events-none text-muted-foreground opacity-70" />
+        </div>
+        {error && <span className="text-xs text-destructive">{error}</span>}
       </div>
     );
   }
