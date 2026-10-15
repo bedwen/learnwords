@@ -1,0 +1,22 @@
+{
+  "name": "LearnWords",
+  "short_name": "LearnWords",
+  "description": "Personal English vocabulary learning application",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#181716",
+  "theme_color": "#181716",
+  "icons": [
+    {
+      "src": "favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
