@@ -76,18 +76,13 @@ export function initializeSchema(db: Database.Database): void {
     -- Indexes as specified in docs/database.md
     CREATE INDEX IF NOT EXISTS idx_words_word              ON words(word);
     CREATE INDEX IF NOT EXISTS idx_words_level             ON words(level);
-    CREATE INDEX IF NOT EXISTS idx_words_sync_id           ON words(sync_id);
-    CREATE INDEX IF NOT EXISTS idx_words_deleted_at        ON words(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_learning_states_word_id      ON learning_states(word_id);
     CREATE INDEX IF NOT EXISTS idx_learning_states_next_review  ON learning_states(next_review);
     CREATE INDEX IF NOT EXISTS idx_learning_states_mastery      ON learning_states(mastery);
     CREATE INDEX IF NOT EXISTS idx_review_history_word_id       ON review_history(word_id);
     CREATE INDEX IF NOT EXISTS idx_review_history_reviewed_at   ON review_history(reviewed_at);
-    CREATE INDEX IF NOT EXISTS idx_review_history_sync_id       ON review_history(sync_id);
 
     -- Folder indexes
-    CREATE INDEX IF NOT EXISTS idx_folders_sync_id        ON folders(sync_id);
-    CREATE INDEX IF NOT EXISTS idx_folders_deleted_at     ON folders(deleted_at);
     CREATE INDEX IF NOT EXISTS idx_word_folders_word_id   ON word_folders(word_id);
     CREATE INDEX IF NOT EXISTS idx_word_folders_folder_id ON word_folders(folder_id);
   `);

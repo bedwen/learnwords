@@ -57,6 +57,54 @@ describe('Database Schema', () => {
     it('should be idempotent (safe to call multiple times)', () => {
       expect(() => initializeSchema(db)).not.toThrow();
     });
+
+    it('should safely migrate legacy tables missing sync_id or deleted_at without throwing', () => {
+      const legacyDb = createTestDatabase();
+      try {
+        legacyDb.exec(`
+          CREATE TABLE words (
+            id TEXT PRIMARY KEY,
+            word TEXT NOT NULL,
+            meaning TEXT NOT NULL,
+            level TEXT NOT NULL,
+            created_at DATETIME DEFAULT (datetime('now')),
+            updated_at DATETIME DEFAULT (datetime('now'))
+          );
+          CREATE TABLE folders (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            color TEXT NOT NULL DEFAULT '#94a3b8',
+            created_at DATETIME DEFAULT (datetime('now')),
+            updated_at DATETIME DEFAULT (datetime('now'))
+          );
+          CREATE TABLE review_history (
+            id TEXT PRIMARY KEY,
+            word_id TEXT NOT NULL,
+            rating TEXT NOT NULL,
+            mastery_before INTEGER NOT NULL,
+            mastery_after INTEGER NOT NULL,
+            interval_step_before INTEGER NOT NULL,
+            interval_step_after INTEGER NOT NULL,
+            reviewed_at DATETIME DEFAULT (datetime('now'))
+          );
+        `);
+
+        expect(() => initializeSchema(legacyDb)).not.toThrow();
+
+        const wordCols = (legacyDb.prepare('PRAGMA table_info(words)').all() as { name: string }[]).map((c) => c.name);
+        expect(wordCols).toContain('sync_id');
+        expect(wordCols).toContain('deleted_at');
+
+        const folderCols = (legacyDb.prepare('PRAGMA table_info(folders)').all() as { name: string }[]).map((c) => c.name);
+        expect(folderCols).toContain('sync_id');
+        expect(folderCols).toContain('deleted_at');
+
+        const reviewCols = (legacyDb.prepare('PRAGMA table_info(review_history)').all() as { name: string }[]).map((c) => c.name);
+        expect(reviewCols).toContain('sync_id');
+      } finally {
+        legacyDb.close();
+      }
+    });
   });
 
   describe('Words table', () => {
