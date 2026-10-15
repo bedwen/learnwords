@@ -7,6 +7,8 @@ import {
   AlertTriangle,
   FileJson,
   CheckCircle2,
+  RefreshCw,
+  Wifi,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import {
@@ -14,6 +16,9 @@ import {
   importData,
   importWordsCsv,
   exportWordsCsv as apiExportWordsCsv,
+  exportSyncBundle as apiExportSyncBundle,
+  importSyncBundle as apiImportSyncBundle,
+  syncWithLanPeer,
   ExportData,
   CsvImportResult,
 } from '../api/data';
@@ -27,11 +32,66 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../co
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
 import { Badge } from '../components/ui/Badge';
+import { useToast } from '../context/ToastContext';
 
 export function DataManagement() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const toast = useToast();
+
+  // Sync Bundle state
+  const syncFileInputRef = useRef<HTMLInputElement>(null);
+
+  // LAN Peer Sync state
+  const [peerUrl, setPeerUrl] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('learnwords-peer-url');
+      if (saved) return saved;
+      if (typeof window !== 'undefined') {
+        const port = window.location.port ? `:${window.location.port}` : '';
+        return `${window.location.protocol}//${window.location.hostname}${port}`;
+      }
+    }
+    return 'http://localhost:3001';
+  });
+  const [isLanSyncing, setIsLanSyncing] = useState(false);
+
+  const handlePeerUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setPeerUrl(val);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('learnwords-peer-url', val);
+    }
+  };
+
+  const handleLanSync = async () => {
+    setIsLanSyncing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await syncWithLanPeer(peerUrl);
+      if (res.success) {
+        const msg = `Synced: ${res.summary}`;
+        setSuccess(msg);
+        toast.success(msg);
+
+        // Refresh folders
+        getFolders()
+          .then((folderRes) => {
+            setFolders(folderRes.folders);
+            setUngroupedCount(folderRes.ungroupedCount);
+          })
+          .catch(() => {});
+      }
+    } catch (err: any) {
+      const msg = err.message || 'LAN Peer Sync failed. Check peer URL and network connection.';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setIsLanSyncing(false);
+    }
+  };
 
   // JSON Backup Restore state
   const [importFileData, setImportFileData] = useState<ExportData | null>(null);
@@ -58,6 +118,79 @@ export function DataManagement() {
       })
       .catch(() => {});
   }, []);
+
+  // --- Export Sync Bundle ---
+  const handleExportSyncBundle = async () => {
+    try {
+      setIsProcessing(true);
+      setError(null);
+      setSuccess(null);
+      const { blob, filename } = await apiExportSyncBundle();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      const msg = `Sync bundle exported successfully as ${filename}.`;
+      setSuccess(msg);
+      toast.success(msg);
+    } catch (err: any) {
+      const msg = err.message || 'Failed to export sync bundle.';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // --- Merge Sync Bundle ---
+  const handleSyncFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const result = await apiImportSyncBundle(file);
+      if (result.success) {
+        const parts: string[] = [];
+        if (result.wordsAdded > 0) parts.push(`+${result.wordsAdded} words`);
+        if (result.wordsUpdated > 0) parts.push(`${result.wordsUpdated} updated`);
+        if (result.wordsDeleted > 0) parts.push(`${result.wordsDeleted} deleted`);
+        if (result.foldersAdded > 0) parts.push(`+${result.foldersAdded} folders`);
+        if (result.reviewsMerged > 0) parts.push(`+${result.reviewsMerged} reviews merged`);
+
+        const summary = parts.length > 0 ? parts.join(', ') : 'No changes to apply';
+        const msg = `Synced: ${summary}`;
+        setSuccess(msg);
+        toast.success(msg);
+
+        // Refresh folders
+        getFolders()
+          .then((res) => {
+            setFolders(res.folders);
+            setUngroupedCount(res.ungroupedCount);
+          })
+          .catch(() => {});
+      } else {
+        const msg = 'Smart Merge failed.';
+        setError(msg);
+        toast.error(msg);
+      }
+    } catch (err: any) {
+      const msg = err.message || 'Failed to merge sync bundle.';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setIsProcessing(false);
+      if (syncFileInputRef.current) {
+        syncFileInputRef.current.value = '';
+      }
+    }
+  };
 
   // --- Export JSON ---
   const handleExport = async () => {
@@ -227,8 +360,12 @@ export function DataManagement() {
         </div>
       )}
 
-      <Tabs defaultValue="csv" className="space-y-6">
-        <TabsList className="grid w-full sm:w-80 grid-cols-2">
+      <Tabs defaultValue="sync" className="space-y-6">
+        <TabsList className="grid w-full sm:w-[480px] grid-cols-3">
+          <TabsTrigger value="sync" className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            <span>Smart Sync</span>
+          </TabsTrigger>
           <TabsTrigger value="csv" className="gap-2">
             <FileSpreadsheet className="h-4 w-4" />
             <span>CSV Data</span>
@@ -238,6 +375,131 @@ export function DataManagement() {
             <span>Full Backup</span>
           </TabsTrigger>
         </TabsList>
+
+        {/* Smart Sync Tab */}
+        <TabsContent value="sync" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <RefreshCw className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base font-semibold">
+                  Smart Sync Bundle (File / Syncthing)
+                </CardTitle>
+              </div>
+              <CardDescription>
+                Conflict-free, bi-directional delta synchronization between devices (Android, Windows, Linux) without third-party servers.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="p-4 rounded-xl bg-secondary/30 border border-border text-xs leading-relaxed text-muted-foreground space-y-2">
+                <p>
+                  <strong className="text-foreground">How it works:</strong> Export your sync bundle on one device and merge it on another. The pure TypeScript merge engine deterministically resolves edits via Last-Write-Wins (LWW) and losslessly combines review histories.
+                </p>
+                <p>
+                  Place the exported bundle in a <strong className="text-foreground">Syncthing</strong>, USB, or local shared folder to keep your mobile and desktop devices harmonized 100% offline.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                {/* Export Action */}
+                <div className="p-4 rounded-xl border border-border bg-card space-y-3 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                      <Download className="h-4 w-4 text-primary" />
+                      Export Sync Bundle
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Generate a delta bundle containing vocabulary, folders, and review logs.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleExportSyncBundle}
+                    disabled={isProcessing}
+                    className="w-full gap-2"
+                  >
+                    <Download className="h-4 w-4" />
+                    <span>Export Sync Bundle</span>
+                  </Button>
+                </div>
+
+                {/* Merge Action */}
+                <div className="p-4 rounded-xl border border-border bg-card space-y-3 flex flex-col justify-between">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                      <Upload className="h-4 w-4 text-primary" />
+                      Merge Sync Bundle
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Non-destructively absorb updates, new reviews, and soft-deletes from another device.
+                    </p>
+                  </div>
+                  <input
+                    type="file"
+                    accept=".json"
+                    ref={syncFileInputRef}
+                    className="hidden"
+                    onChange={handleSyncFileSelect}
+                  />
+                  <Button
+                    variant="secondary"
+                    onClick={() => syncFileInputRef.current?.click()}
+                    disabled={isProcessing}
+                    className="w-full gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span>{isProcessing ? 'Merging...' : 'Merge Sync Bundle'}</span>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Direct LAN Peer Sync (Wi-Fi) Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Wifi className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base font-semibold">
+                  Direct LAN Peer Sync (Wi-Fi)
+                </CardTitle>
+              </div>
+              <CardDescription>
+                Synchronize directly with another LearnWords peer on your local Wi-Fi network without exporting files.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 rounded-xl bg-secondary/30 border border-border text-xs leading-relaxed text-muted-foreground space-y-2">
+                <p>
+                  <strong className="text-foreground">Wi-Fi Synchronization:</strong> Enter the IP address and port of your LearnWords peer node (e.g., <code className="text-primary font-mono font-medium">http://192.168.1.100:3001</code>). Make sure both devices are connected to the same Wi-Fi network.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground">
+                    Peer Server URL
+                  </label>
+                  <Input
+                    type="url"
+                    value={peerUrl}
+                    onChange={handlePeerUrlChange}
+                    placeholder="http://192.168.1.100:3001"
+                    disabled={isLanSyncing || isProcessing}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleLanSync}
+                  disabled={isLanSyncing || isProcessing}
+                  className="w-full gap-2"
+                >
+                  <Wifi className="h-4 w-4" />
+                  <span>{isLanSyncing ? 'Syncing with Peer...' : 'Sync with Peer'}</span>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* CSV Tab */}
         <TabsContent value="csv" className="space-y-6">

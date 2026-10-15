@@ -1,7 +1,9 @@
 import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 import { getDatabase } from '../db';
 import { WordWithState, CreateWordDto, UpdateWordDto } from '../../src/types';
 import { FolderService } from './folders';
+import { normalizeTimestamp } from '../../src/storage/smartMerge';
 
 export const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
@@ -48,13 +50,13 @@ export class WordService {
 
     // Folder filtering
     if (options?.folderId === 'ungrouped') {
-      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id)`;
+      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id) AND w.deleted_at IS NULL`;
     } else if (options?.folderId) {
       query += ` JOIN word_folders wf ON w.id = wf.word_id AND wf.folder_id = ?`;
       params.push(options.folderId);
-      query += ` WHERE 1=1`;
+      query += ` WHERE w.deleted_at IS NULL`;
     } else {
-      query += ` WHERE 1=1`;
+      query += ` WHERE w.deleted_at IS NULL`;
     }
 
     if (options?.search) {
@@ -113,7 +115,7 @@ export class WordService {
         ls.consecutive_correct as ls_consecutive_correct
       FROM words w
       LEFT JOIN learning_states ls ON w.id = ls.word_id
-      WHERE w.id = ?
+      WHERE w.id = ? AND w.deleted_at IS NULL
     `;
     
     const row = db.prepare(query).get(id) as any;
@@ -131,12 +133,13 @@ export class WordService {
   static createWord(data: CreateWordDto): WordWithState & { folderIds: string[] } {
     const db = getDatabase();
     const wordId = nanoid();
+    const syncId = crypto.randomUUID();
     const stateId = nanoid();
     const now = new Date().toISOString();
 
     const insertWord = db.prepare(`
-      INSERT INTO words (id, word, meaning, level, part_of_speech, example_sentence, example_translation, notes, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO words (id, sync_id, word, meaning, level, part_of_speech, example_sentence, example_translation, notes, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const insertState = db.prepare(`
@@ -148,6 +151,7 @@ export class WordService {
     const transaction = db.transaction(() => {
       insertWord.run(
         wordId,
+        syncId,
         data.word.trim(),
         data.meaning.trim(),
         data.level,
@@ -232,12 +236,21 @@ export class WordService {
   }
 
   /**
-   * Delete a word (cascade delete will remove learning state and history)
+   * Soft delete a word: marks deleted_at = datetime('now'), updated_at = datetime('now')
+   * and unlinks junction records in word_folders.
    */
   static deleteWord(id: string): boolean {
     const db = getDatabase();
-    const result = db.prepare(`DELETE FROM words WHERE id = ?`).run(id);
-    return result.changes > 0;
+    let changes = 0;
+    const tx = db.transaction(() => {
+      const result = db.prepare(`UPDATE words SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`).run(id);
+      changes = result.changes;
+      if (changes > 0) {
+        db.prepare('DELETE FROM word_folders WHERE word_id = ?').run(id);
+      }
+    });
+    tx();
+    return changes > 0;
   }
 
   /**
@@ -324,6 +337,7 @@ export class WordService {
   private static mapRowToWordWithState(row: any): WordWithState {
     return {
       id: row.id,
+      sync_id: row.sync_id || row.id,
       word: row.word,
       meaning: row.meaning,
       level: row.level,
@@ -332,7 +346,8 @@ export class WordService {
       example_translation: row.example_translation,
       notes: row.notes,
       created_at: row.created_at,
-      updated_at: row.updated_at,
+      updated_at: normalizeTimestamp(row.updated_at),
+      deleted_at: row.deleted_at ? normalizeTimestamp(row.deleted_at) : null,
       learning_state: {
         id: row.ls_id,
         word_id: row.ls_word_id,

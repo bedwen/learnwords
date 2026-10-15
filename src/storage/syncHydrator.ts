@@ -117,9 +117,28 @@ export async function hydrateLocalDatabase(options: HydrationOptions = {}): Prom
     const statesToPut: LearningState[] = [];
     const wordFoldersToPut: LocalWordFolderRecord[] = [];
 
+    const toEpoch = (val: any) => {
+      if (typeof val === 'number') return val;
+      if (typeof val === 'string') {
+        const parsed = new Date(val).getTime();
+        if (!isNaN(parsed)) return parsed;
+      }
+      return Date.now();
+    };
+
+    const genUuid = () =>
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === 'x' ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
+
     for (const item of wordsData) {
       wordsToPut.push({
         id: item.id,
+        sync_id: (item as any).sync_id || genUuid(),
         word: item.word,
         meaning: item.meaning,
         level: item.level,
@@ -128,7 +147,8 @@ export async function hydrateLocalDatabase(options: HydrationOptions = {}): Prom
         example_translation: item.example_translation || null,
         notes: item.notes || null,
         created_at: item.created_at,
-        updated_at: item.updated_at,
+        updated_at: toEpoch(item.updated_at),
+        deleted_at: (item as any).deleted_at ?? null,
       });
 
       if (item.learning_state) {
@@ -149,11 +169,13 @@ export async function hydrateLocalDatabase(options: HydrationOptions = {}): Prom
     const foldersList = foldersData.folders || [];
     const foldersToPut: Folder[] = foldersList.map((f) => ({
       id: f.id,
+      sync_id: (f as any).sync_id || genUuid(),
       name: f.name,
       color: f.color || '#94a3b8',
       wordCount: f.wordCount || 0,
       created_at: f.created_at,
-      updated_at: f.updated_at,
+      updated_at: toEpoch(f.updated_at),
+      deleted_at: (f as any).deleted_at ?? null,
     }));
 
     // Bulk store into IndexedDB

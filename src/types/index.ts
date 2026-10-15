@@ -13,7 +13,9 @@ export interface Word {
   example_translation?: string | null;
   notes?: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at: number;
+  sync_id: string;
+  deleted_at: number | null;
 }
 
 export interface LearningState {
@@ -128,12 +130,55 @@ export interface Folder {
   color: string;
   wordCount: number;
   created_at: string;
-  updated_at: string;
+  updated_at: number;
+  sync_id: string;
+  deleted_at: number | null;
 }
 
 export interface FolderListResponse {
   folders: Folder[];
   ungroupedCount: number;
+}
+
+// Review History types
+export interface ReviewHistoryRecord {
+  sync_id?: string;
+  rating: ReviewRating;
+  reviewed_at: string;
+}
+
+export interface LocalReviewHistoryRecord {
+  id: string;
+  sync_id: string;
+  word_id: string;
+  rating: ReviewRating;
+  mastery_before: number;
+  mastery_after: number;
+  interval_step_before: number;
+  interval_step_after: number;
+  reviewed_at: string;
+}
+
+// Sync Bundle types
+export interface SyncBundle {
+  version: 1;
+  deviceId: string;
+  exportedAt: string;
+  words: Word[];
+  folders: Folder[];
+  word_folders: { word_id: string; folder_id: string }[];
+  review_history: LocalReviewHistoryRecord[];
+}
+
+export interface SyncMergeResult {
+  success: boolean;
+  wordsAdded: number;
+  wordsUpdated: number;
+  wordsDeleted: number;
+  foldersAdded: number;
+  foldersUpdated: number;
+  foldersDeleted: number;
+  reviewsMerged: number;
 }
 
 export interface ExportData {
@@ -155,4 +200,5 @@ export interface CsvImportResult {
   skipped: number;
   errors: string[];
 }
+
 

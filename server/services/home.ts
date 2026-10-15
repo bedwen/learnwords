@@ -1,20 +1,26 @@
 import { getDatabase } from '../db';
 import { ActivityDay, CEFRLevel, HomeSummary, DetailedStats, WordWithState } from '../../src/types';
+import { normalizeTimestamp } from '../../src/storage/smartMerge';
 
 export class HomeService {
   static getHomeSummary(): HomeSummary {
     const db = getDatabase();
     const now = new Date().toISOString();
 
-    // 1. Total Words
-    const totalWordsRow = db.prepare('SELECT COUNT(*) as count FROM words').get() as any;
+    // 1. Total Words (excluding soft-deleted)
+    const totalWordsRow = db.prepare('SELECT COUNT(*) as count FROM words WHERE deleted_at IS NULL').get() as any;
     const totalWords = totalWordsRow.count;
 
-    // 2. Due for review (next_review <= now OR mastery = 0)
-    const dueRow = db.prepare('SELECT COUNT(*) as count FROM learning_states WHERE next_review <= ? OR mastery = 0').get(now) as any;
+    // 2. Due for review (next_review <= now OR mastery = 0, excluding soft-deleted)
+    const dueRow = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM learning_states ls
+      JOIN words w ON w.id = ls.word_id
+      WHERE w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)
+    `).get(now) as any;
     const dueForReview = dueRow.count;
 
-    // 3. CEFR Distribution (Total & Mastered)
+    // 3. CEFR Distribution (Total & Mastered, excluding soft-deleted)
     const levels: CEFRLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
     const cefrDistribution = levels.map(level => {
       const stats = db.prepare(`
@@ -23,7 +29,7 @@ export class HomeService {
           SUM(CASE WHEN ls.mastery = 4 THEN 1 ELSE 0 END) as mastered
         FROM words w
         LEFT JOIN learning_states ls ON w.id = ls.word_id
-        WHERE w.level = ?
+        WHERE w.level = ? AND w.deleted_at IS NULL
       `).get(level) as any;
 
       return {
@@ -45,7 +51,7 @@ export class HomeService {
     const wordRows = db.prepare(`
       SELECT date(created_at) as date, COUNT(*) as count
       FROM words
-      WHERE created_at >= date('now', '-90 days')
+      WHERE created_at >= date('now', '-90 days') AND deleted_at IS NULL
       GROUP BY date(created_at)
       ORDER BY date ASC
     `).all() as { date: string; count: number }[];
@@ -129,29 +135,35 @@ export class HomeService {
   static getDetailedStats(): DetailedStats {
     const db = getDatabase();
 
-    // 1. Total words
-    const totalWordsRow = db.prepare('SELECT COUNT(*) as count FROM words').get() as any;
+    // 1. Total words (excluding soft-deleted)
+    const totalWordsRow = db.prepare('SELECT COUNT(*) as count FROM words WHERE deleted_at IS NULL').get() as any;
     const totalWords = totalWordsRow.count;
 
-    // 2. CEFR Distribution
+    // 2. CEFR Distribution (excluding soft-deleted)
     const cefrDistributionRows = db.prepare(`
-      SELECT level, COUNT(*) as count FROM words GROUP BY level
+      SELECT level, COUNT(*) as count FROM words WHERE deleted_at IS NULL GROUP BY level
     `).all() as any[];
     const cefrDistribution = cefrDistributionRows.map(r => ({ level: r.level as CEFRLevel, count: r.count }));
 
-    // 3. Mastery Distribution
+    // 3. Mastery Distribution (excluding soft-deleted)
     const masteryDistributionRows = db.prepare(`
-      SELECT mastery, COUNT(*) as count FROM learning_states GROUP BY mastery
+      SELECT ls.mastery, COUNT(*) as count
+      FROM learning_states ls
+      JOIN words w ON w.id = ls.word_id
+      WHERE w.deleted_at IS NULL
+      GROUP BY ls.mastery
     `).all() as any[];
     const masteryDistribution = masteryDistributionRows.map(r => ({ mastery: r.mastery, count: r.count }));
 
-    // 4. Accuracy and totals
+    // 4. Accuracy and totals (excluding soft-deleted)
     const totalsRow = db.prepare(`
       SELECT 
-        SUM(review_count) as totalReviews,
-        SUM(correct_count) as totalCorrect,
-        SUM(wrong_count) as totalWrong
-      FROM learning_states
+        SUM(ls.review_count) as totalReviews,
+        SUM(ls.correct_count) as totalCorrect,
+        SUM(ls.wrong_count) as totalWrong
+      FROM learning_states ls
+      JOIN words w ON w.id = ls.word_id
+      WHERE w.deleted_at IS NULL
     `).get() as any;
 
     const totalReviews = totalsRow.totalReviews || 0;
@@ -159,7 +171,7 @@ export class HomeService {
     const totalWrong = totalsRow.totalWrong || 0;
     const accuracy = totalReviews > 0 ? (totalCorrect / totalReviews) * 100 : 0;
 
-    // 5. Difficult Words
+    // 5. Difficult Words (excluding soft-deleted)
     const difficultWordsRows = db.prepare(`
       SELECT 
         w.*,
@@ -175,14 +187,14 @@ export class HomeService {
         ls.consecutive_correct as ls_consecutive_correct
       FROM words w
       JOIN learning_states ls ON w.id = ls.word_id
-      WHERE ls.wrong_count > ls.correct_count AND ls.review_count >= 3
+      WHERE w.deleted_at IS NULL AND ls.wrong_count > ls.correct_count AND ls.review_count >= 3
       ORDER BY (CAST(ls.wrong_count AS FLOAT) / ls.review_count) DESC
       LIMIT 10
     `).all() as any[];
 
     const difficultWords = difficultWordsRows.map(row => this.mapRowToWordWithState(row));
 
-    // 6. Recent Reviews
+    // 6. Recent Reviews (excluding soft-deleted words)
     const recentRows = db.prepare(`
       SELECT 
         w.word,
@@ -191,6 +203,7 @@ export class HomeService {
         rh.reviewed_at
       FROM review_history rh
       JOIN words w ON w.id = rh.word_id
+      WHERE w.deleted_at IS NULL
       ORDER BY rh.reviewed_at DESC
       LIMIT 10
     `).all() as any[];
@@ -211,6 +224,7 @@ export class HomeService {
   private static mapRowToWordWithState(row: any): WordWithState {
     return {
       id: row.id,
+      sync_id: row.sync_id || row.id,
       word: row.word,
       meaning: row.meaning,
       level: row.level,
@@ -219,7 +233,8 @@ export class HomeService {
       example_translation: row.example_translation,
       notes: row.notes,
       created_at: row.created_at,
-      updated_at: row.updated_at,
+      updated_at: normalizeTimestamp(row.updated_at),
+      deleted_at: row.deleted_at ? normalizeTimestamp(row.deleted_at) : null,
       learning_state: {
         id: row.ls_id,
         word_id: row.ls_word_id,
