@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 import { getDatabase } from '../db';
 import { WordWithState, ReviewRating } from '../../src/types';
 import { LearningEngine } from './learningEngine';
@@ -12,7 +13,7 @@ export class StudyService {
    * 1. Due reviews (next_review <= now)
    * 2. New words (mastery = 0)
    * 
-   * Optionally filtered by folder ID.
+   * Optionally filtered by folder ID. Soft-deleted words are excluded.
    */
   static getStudyQueue(limit = 50, folderId?: string): WordWithState[] {
     const db = getDatabase();
@@ -39,15 +40,15 @@ export class StudyService {
 
     if (folderId === 'ungrouped') {
       query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id)`;
-      query += ` AND (ls.next_review <= ? OR ls.mastery = 0)`;
+      query += ` AND w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
       params.push(now);
     } else if (folderId) {
       query += ` JOIN word_folders wf ON w.id = wf.word_id AND wf.folder_id = ?`;
       params.push(folderId);
-      query += ` WHERE (ls.next_review <= ? OR ls.mastery = 0)`;
+      query += ` WHERE w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
       params.push(now);
     } else {
-      query += ` WHERE (ls.next_review <= ? OR ls.mastery = 0)`;
+      query += ` WHERE w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
       params.push(now);
     }
 
@@ -134,8 +135,8 @@ export class StudyService {
     `);
 
     const insertHistory = db.prepare(`
-      INSERT INTO review_history (id, word_id, rating, mastery_before, mastery_after, interval_step_before, interval_step_after, reviewed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO review_history (id, sync_id, word_id, rating, mastery_before, mastery_after, interval_step_before, interval_step_after, reviewed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const transaction = db.transaction(() => {
@@ -153,6 +154,7 @@ export class StudyService {
 
       insertHistory.run(
         nanoid(),
+        crypto.randomUUID(),
         wordId,
         rating,
         state.mastery,
@@ -168,3 +170,4 @@ export class StudyService {
     return WordService.getWordById(wordId)!;
   }
 }
+

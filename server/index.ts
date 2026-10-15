@@ -3,8 +3,8 @@ import { createApp } from './app';
 
 const app = createApp();
 const PORT = 3001;
-// Bind to loopback only so the API is never exposed to the LAN (D018).
-const HOST = '127.0.0.1';
+// Allow LAN binding when launched with HOST=0.0.0.0 or custom IP without hardcoding 0.0.0.0
+const HOST = process.env.HOST || '127.0.0.1';
 
 // Initialize database and start server
 const db = getDatabase();

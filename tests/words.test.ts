@@ -65,22 +65,20 @@ describe('WordService', () => {
     expect(updated?.word).toBe('apple'); // unchanged
   });
 
-  it('should delete a word and cascade its learning state', () => {
+  it('should soft-delete a word', () => {
     const word = WordService.createWord({ word: 'apple', meaning: 'apple', level: 'B1' });
     
     // Check it exists
     expect(WordService.getWordById(word.id)).toBeDefined();
-    const lsCountBefore = globalThis.__TEST_DB__.prepare('SELECT COUNT(*) as count FROM learning_states').get() as any;
-    expect(lsCountBefore.count).toBe(1);
 
     // Delete
     const result = WordService.deleteWord(word.id);
     expect(result).toBe(true);
 
-    // Check it's gone
+    // Check it's gone from active queries
     expect(WordService.getWordById(word.id)).toBeNull();
-    const lsCountAfter = globalThis.__TEST_DB__.prepare('SELECT COUNT(*) as count FROM learning_states').get() as any;
-    expect(lsCountAfter.count).toBe(0);
+    const stored = globalThis.__TEST_DB__.prepare('SELECT deleted_at FROM words WHERE id = ?').get(word.id) as any;
+    expect(stored.deleted_at).not.toBeNull();
   });
 
   it('should filter words by search and level', () => {

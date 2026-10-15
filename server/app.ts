@@ -7,6 +7,7 @@ import studyRouter from './routes/study';
 import homeRouter from './routes/home';
 import foldersRouter from './routes/folders';
 import dataRouter from './routes/data';
+import syncRouter from './routes/sync';
 
 /**
  * Browser origins allowed to call the API (see D018).
@@ -24,12 +25,17 @@ export const ALLOWED_ORIGINS: readonly string[] = [
 ];
 
 /** Routes that define their own, larger JSON body parser. */
-const CUSTOM_BODY_LIMIT_PATHS = new Set(['/api/data/import']);
+const CUSTOM_BODY_LIMIT_PATHS = new Set(['/api/data/import', '/api/sync']);
+
+/** RFC 1918 private network origin matcher for LAN Wi-Fi sync. */
+const RFC1918_ORIGIN_REGEX = /^https?:\/\/(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?::\d+)?$/;
 
 function isAllowedOrigin(origin: string | undefined): boolean {
   // Requests without an Origin header come from local tools (curl, scripts)
   // or same-origin navigation, which are not cross-origin browser requests.
-  return !origin || ALLOWED_ORIGINS.includes(origin);
+  if (!origin) return true;
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  return RFC1918_ORIGIN_REGEX.test(origin);
 }
 
 /** Zero-dependency security headers (replaces the need for helmet). */
@@ -86,6 +92,7 @@ export function createApp(): express.Express {
   app.use('/api/dashboard', homeRouter);
   app.use('/api/folders', foldersRouter);
   app.use('/api/data', dataRouter);
+  app.use('/api/sync', syncRouter);
 
   // Health check endpoint
   app.get('/api/health', (_req, res) => {

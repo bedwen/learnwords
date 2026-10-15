@@ -1,13 +1,16 @@
 import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 import { getDatabase } from '../db';
 
 export interface FolderRow {
   id: string;
+  sync_id?: string;
   name: string;
   color: string;
   wordCount: number;
   created_at: string;
   updated_at: string;
+  deleted_at?: string | number | null;
 }
 
 export interface FolderListResult {
@@ -18,6 +21,7 @@ export interface FolderListResult {
 export class FolderService {
   /**
    * List all folders with word counts, plus the ungrouped word count.
+   * Soft-deleted folders and words are filtered out.
    */
   static listFolders(): FolderListResult {
     const db = getDatabase();
@@ -25,21 +29,28 @@ export class FolderService {
     const folders = db.prepare(`
       SELECT 
         f.id,
+        f.sync_id,
         f.name,
         f.color,
         f.created_at,
         f.updated_at,
-        COUNT(wf.word_id) as wordCount
+        f.deleted_at,
+        COUNT(w.id) as wordCount
       FROM folders f
       LEFT JOIN word_folders wf ON f.id = wf.folder_id
+      LEFT JOIN words w ON wf.word_id = w.id AND w.deleted_at IS NULL
+      WHERE f.deleted_at IS NULL
       GROUP BY f.id
       ORDER BY f.created_at ASC
     `).all() as FolderRow[];
 
     const ungroupedRow = db.prepare(`
       SELECT COUNT(*) as count FROM words w
-      WHERE NOT EXISTS (
-        SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id
+      WHERE w.deleted_at IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM word_folders wf
+        JOIN folders f ON wf.folder_id = f.id
+        WHERE wf.word_id = w.id AND f.deleted_at IS NULL
       )
     `).get() as { count: number };
 
@@ -57,14 +68,17 @@ export class FolderService {
     const row = db.prepare(`
       SELECT 
         f.id,
+        f.sync_id,
         f.name,
         f.color,
         f.created_at,
         f.updated_at,
-        COUNT(wf.word_id) as wordCount
+        f.deleted_at,
+        COUNT(w.id) as wordCount
       FROM folders f
       LEFT JOIN word_folders wf ON f.id = wf.folder_id
-      WHERE f.id = ?
+      LEFT JOIN words w ON wf.word_id = w.id AND w.deleted_at IS NULL
+      WHERE f.id = ? AND f.deleted_at IS NULL
       GROUP BY f.id
     `).get(id) as FolderRow | undefined;
     return row || null;
@@ -76,12 +90,13 @@ export class FolderService {
   static createFolder(name: string, color: string): FolderRow {
     const db = getDatabase();
     const id = nanoid();
+    const sync_id = crypto.randomUUID();
     const now = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO folders (id, name, color, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, name.trim(), color, now, now);
+      INSERT INTO folders (id, sync_id, name, color, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, sync_id, name.trim(), color, now, now);
 
     return this.getFolderById(id)!;
   }
@@ -112,12 +127,20 @@ export class FolderService {
   }
 
   /**
-   * Delete a folder. Words are NOT deleted — they become ungrouped.
+   * Delete a folder (soft-delete). Words are NOT deleted — they become ungrouped.
    */
   static deleteFolder(id: string): boolean {
     const db = getDatabase();
-    const result = db.prepare('DELETE FROM folders WHERE id = ?').run(id);
-    return result.changes > 0;
+    let changes = 0;
+    const tx = db.transaction(() => {
+      const result = db.prepare(`UPDATE folders SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`).run(id);
+      changes = result.changes;
+      if (changes > 0) {
+        db.prepare('DELETE FROM word_folders WHERE folder_id = ?').run(id);
+      }
+    });
+    tx();
+    return changes > 0;
   }
 
   /**

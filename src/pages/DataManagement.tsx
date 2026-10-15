@@ -8,6 +8,7 @@ import {
   FileJson,
   CheckCircle2,
   RefreshCw,
+  Wifi,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import {
@@ -17,6 +18,7 @@ import {
   exportWordsCsv as apiExportWordsCsv,
   exportSyncBundle as apiExportSyncBundle,
   importSyncBundle as apiImportSyncBundle,
+  syncWithLanPeer,
   ExportData,
   CsvImportResult,
 } from '../api/data';
@@ -40,6 +42,56 @@ export function DataManagement() {
 
   // Sync Bundle state
   const syncFileInputRef = useRef<HTMLInputElement>(null);
+
+  // LAN Peer Sync state
+  const [peerUrl, setPeerUrl] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('learnwords-peer-url');
+      if (saved) return saved;
+      if (typeof window !== 'undefined') {
+        const port = window.location.port ? `:${window.location.port}` : '';
+        return `${window.location.protocol}//${window.location.hostname}${port}`;
+      }
+    }
+    return 'http://localhost:3001';
+  });
+  const [isLanSyncing, setIsLanSyncing] = useState(false);
+
+  const handlePeerUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setPeerUrl(val);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('learnwords-peer-url', val);
+    }
+  };
+
+  const handleLanSync = async () => {
+    setIsLanSyncing(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const res = await syncWithLanPeer(peerUrl);
+      if (res.success) {
+        const msg = `Synced: ${res.summary}`;
+        setSuccess(msg);
+        toast.success(msg);
+
+        // Refresh folders
+        getFolders()
+          .then((folderRes) => {
+            setFolders(folderRes.folders);
+            setUngroupedCount(folderRes.ungroupedCount);
+          })
+          .catch(() => {});
+      }
+    } catch (err: any) {
+      const msg = err.message || 'LAN Peer Sync failed. Check peer URL and network connection.';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setIsLanSyncing(false);
+    }
+  };
 
   // JSON Backup Restore state
   const [importFileData, setImportFileData] = useState<ExportData | null>(null);
@@ -398,6 +450,52 @@ export function DataManagement() {
                     <span>{isProcessing ? 'Merging...' : 'Merge Sync Bundle'}</span>
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Direct LAN Peer Sync (Wi-Fi) Card */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Wifi className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base font-semibold">
+                  Direct LAN Peer Sync (Wi-Fi)
+                </CardTitle>
+              </div>
+              <CardDescription>
+                Synchronize directly with another LearnWords peer on your local Wi-Fi network without exporting files.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="p-4 rounded-xl bg-secondary/30 border border-border text-xs leading-relaxed text-muted-foreground space-y-2">
+                <p>
+                  <strong className="text-foreground">Wi-Fi Synchronization:</strong> Enter the IP address and port of your LearnWords peer node (e.g., <code className="text-primary font-mono font-medium">http://192.168.1.100:3001</code>). Make sure both devices are connected to the same Wi-Fi network.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-foreground">
+                    Peer Server URL
+                  </label>
+                  <Input
+                    type="url"
+                    value={peerUrl}
+                    onChange={handlePeerUrlChange}
+                    placeholder="http://192.168.1.100:3001"
+                    disabled={isLanSyncing || isProcessing}
+                  />
+                </div>
+
+                <Button
+                  onClick={handleLanSync}
+                  disabled={isLanSyncing || isProcessing}
+                  className="w-full gap-2"
+                >
+                  <Wifi className="h-4 w-4" />
+                  <span>{isLanSyncing ? 'Syncing with Peer...' : 'Sync with Peer'}</span>
+                </Button>
               </div>
             </CardContent>
           </Card>
