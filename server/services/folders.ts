@@ -95,24 +95,17 @@ export class FolderService {
     const existing = this.getFolderById(id);
     if (!existing) return null;
 
-    const updates: string[] = [];
-    const params: any[] = [];
+    const now = new Date().toISOString();
 
-    if (data.name !== undefined) {
-      updates.push('name = ?');
-      params.push(data.name.trim());
-    }
-    if (data.color !== undefined) {
-      updates.push('color = ?');
-      params.push(data.color);
-    }
-
-    if (updates.length > 0) {
-      updates.push('updated_at = ?');
-      params.push(new Date().toISOString());
-      params.push(id);
-
-      db.prepare(`UPDATE folders SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+    if (data.name !== undefined && data.color !== undefined) {
+      db.prepare('UPDATE folders SET name = ?, color = ?, updated_at = ? WHERE id = ?')
+        .run(data.name.trim(), data.color, now, id);
+    } else if (data.name !== undefined) {
+      db.prepare('UPDATE folders SET name = ?, updated_at = ? WHERE id = ?')
+        .run(data.name.trim(), now, id);
+    } else if (data.color !== undefined) {
+      db.prepare('UPDATE folders SET color = ?, updated_at = ? WHERE id = ?')
+        .run(data.color, now, id);
     }
 
     return this.getFolderById(id);

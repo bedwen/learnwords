@@ -1,2 +1,2 @@
-export { getDatabase, closeDatabase, createTestDatabase } from './connection';
+export { getDatabase, closeDatabase, createTestDatabase, getDatabasePath } from './connection';
 export { initializeSchema } from './schema';

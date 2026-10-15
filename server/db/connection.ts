@@ -3,20 +3,31 @@ import path from 'path';
 import fs from 'fs';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
-const DB_PATH = path.join(DATA_DIR, 'learnwords.db');
-
 let db: Database.Database | null = null;
 
 /**
+ * Get the current resolved database file path.
+ * Checks LEARNWORDS_DB_PATH environment variable, defaulting to data/learnwords.db.
+ */
+export function getDatabasePath(): string {
+  if (process.env.LEARNWORDS_DB_PATH) {
+    return path.resolve(process.cwd(), process.env.LEARNWORDS_DB_PATH);
+  }
+  return path.join(DATA_DIR, 'learnwords.db');
+}
+
+/**
  * Get or create the database connection.
- * Ensures the data directory exists and foreign keys are enabled.
+ * Ensures the target database directory exists and foreign keys are enabled.
  */
 export function getDatabase(): Database.Database {
   if (db) return db;
 
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const targetPath = getDatabasePath();
+  const targetDir = path.dirname(targetPath);
+  fs.mkdirSync(targetDir, { recursive: true });
 
-  db = new Database(DB_PATH);
+  db = new Database(targetPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
 

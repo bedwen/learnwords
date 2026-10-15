@@ -5,6 +5,19 @@ import { CreateWordDto, UpdateWordDto, BatchCefrDto, BatchDeleteDto, BatchFolder
 
 const router = Router();
 
+export const MAX_WORD_LENGTH = 100;
+export const MAX_MEANING_LENGTH = 500;
+export const MAX_SENTENCE_LENGTH = 1000;
+
+function exceedsLengthLimits(data: Partial<CreateWordDto>): boolean {
+  if (data.word && data.word.length > MAX_WORD_LENGTH) return true;
+  if (data.meaning && data.meaning.length > MAX_MEANING_LENGTH) return true;
+  if (data.example_sentence && data.example_sentence.length > MAX_SENTENCE_LENGTH) return true;
+  if (data.example_translation && data.example_translation.length > MAX_SENTENCE_LENGTH) return true;
+  if (data.notes && data.notes.length > MAX_SENTENCE_LENGTH) return true;
+  return false;
+}
+
 function isValidIdList(value: unknown): value is string[] {
   return (
     Array.isArray(value) &&
@@ -119,6 +132,9 @@ router.post('/', (req, res) => {
     if (!['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(data.level)) {
       return res.status(400).json({ error: 'Invalid CEFR level' });
     }
+    if (exceedsLengthLimits(data)) {
+      return res.status(400).json({ error: 'Word/meaning exceeds maximum allowed length' });
+    }
 
     const word = WordService.createWord(data);
     res.status(201).json(word);
@@ -135,6 +151,9 @@ router.put('/:id', (req, res) => {
     
     if (data.level && !['A1', 'A2', 'B1', 'B2', 'C1', 'C2'].includes(data.level)) {
       return res.status(400).json({ error: 'Invalid CEFR level' });
+    }
+    if (exceedsLengthLimits(data)) {
+      return res.status(400).json({ error: 'Word/meaning exceeds maximum allowed length' });
     }
 
     const word = WordService.updateWord(req.params.id, data);
