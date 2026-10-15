@@ -478,4 +478,290 @@ describe('LocalRepository & Autonomous Client-Side Storage', () => {
       expect(secondResult.reason).toBe('already_initialized');
     });
   });
+
+  describe('Detailed Learning Statistics Calculation', () => {
+    it('calculates totals, accuracy, distributions, difficult words, and recent reviews', async () => {
+      // 1. Create words
+      const wordA = await repo.createWord({ word: 'resilient', meaning: 'able to recover quickly', level: 'B2' });
+      const wordB = await repo.createWord({ word: 'aberrant', meaning: 'departing from normal', level: 'C1' });
+      const wordC = await repo.createWord({ word: 'paradox', meaning: 'seemingly contradictory statement', level: 'B1' });
+      const wordD = await repo.createWord({ word: 'basic', meaning: 'fundamental', level: 'A1' });
+
+      // 2. Set learning states
+      // wordA: 4 reviews, 3 correct, 1 wrong, mastery 2
+      await adapter.put<LearningState>('learning_states', {
+        id: wordA.learning_state.id,
+        word_id: wordA.id,
+        mastery: 2,
+        interval_step: 2,
+        next_review: new Date().toISOString(),
+        last_reviewed: new Date(Date.now() - 3600000).toISOString(),
+        review_count: 4,
+        correct_count: 3,
+        wrong_count: 1,
+        consecutive_correct: 2,
+      });
+
+      // wordB: 4 reviews, 1 correct, 3 wrong (difficult candidate: 3 > 1 and 4 >= 3, ratio 0.75)
+      await adapter.put<LearningState>('learning_states', {
+        id: wordB.learning_state.id,
+        word_id: wordB.id,
+        mastery: 1,
+        interval_step: 1,
+        next_review: new Date().toISOString(),
+        last_reviewed: new Date(Date.now() - 7200000).toISOString(),
+        review_count: 4,
+        correct_count: 1,
+        wrong_count: 3,
+        consecutive_correct: 0,
+      });
+
+      // wordC: 3 reviews, 1 correct, 2 wrong (difficult candidate: 2 > 1 and 3 >= 3, ratio 0.667)
+      await adapter.put<LearningState>('learning_states', {
+        id: wordC.learning_state.id,
+        word_id: wordC.id,
+        mastery: 1,
+        interval_step: 1,
+        next_review: new Date().toISOString(),
+        last_reviewed: new Date(Date.now() - 10800000).toISOString(),
+        review_count: 3,
+        correct_count: 1,
+        wrong_count: 2,
+        consecutive_correct: 0,
+      });
+
+      // wordD: untouched (mastery 0, 0 reviews)
+
+      // 3. Add review history events
+      const timeNow = new Date().toISOString();
+      const time1HourAgo = new Date(Date.now() - 3600000).toISOString();
+      const time2HoursAgo = new Date(Date.now() - 7200000).toISOString();
+
+      await adapter.put<LocalReviewHistoryRecord>('review_history', {
+        id: 'rev-1',
+        word_id: wordA.id,
+        rating: 'good',
+        mastery_before: 1,
+        mastery_after: 2,
+        interval_step_before: 1,
+        interval_step_after: 2,
+        reviewed_at: timeNow,
+      });
+
+      await adapter.put<LocalReviewHistoryRecord>('review_history', {
+        id: 'rev-2',
+        word_id: wordB.id,
+        rating: 'again',
+        mastery_before: 1,
+        mastery_after: 1,
+        interval_step_before: 1,
+        interval_step_after: 0,
+        reviewed_at: time1HourAgo,
+      });
+
+      await adapter.put<LocalReviewHistoryRecord>('review_history', {
+        id: 'rev-3',
+        word_id: wordC.id,
+        rating: 'hard',
+        mastery_before: 1,
+        mastery_after: 1,
+        interval_step_before: 1,
+        interval_step_after: 1,
+        reviewed_at: time2HoursAgo,
+      });
+
+      const stats = await repo.getDetailedStats();
+
+      // Totals
+      expect(stats.totalWords).toBe(4);
+      expect(stats.totalReviews).toBe(11); // 4 + 4 + 3 + 0
+      expect(stats.totalCorrect).toBe(5); // 3 + 1 + 1 + 0
+      expect(stats.totalWrong).toBe(6); // 1 + 3 + 2 + 0
+      expect(stats.accuracy).toBe(Math.round((5 / 11) * 100)); // 45%
+
+      // CEFR Distribution
+      const cefrMap = new Map(stats.cefrDistribution.map((d) => [d.level, d.count]));
+      expect(cefrMap.get('B2')).toBe(1);
+      expect(cefrMap.get('C1')).toBe(1);
+      expect(cefrMap.get('B1')).toBe(1);
+      expect(cefrMap.get('A1')).toBe(1);
+
+      // Mastery Distribution
+      const masteryMap = new Map(stats.masteryDistribution.map((d) => [d.mastery, d.count]));
+      expect(masteryMap.get(0)).toBe(1); // wordD
+      expect(masteryMap.get(1)).toBe(2); // wordB, wordC
+      expect(masteryMap.get(2)).toBe(1); // wordA
+
+      // Difficult words: top candidates sorted by wrong/review ratio DESC
+      expect(stats.difficultWords).toHaveLength(2);
+      expect(stats.difficultWords[0].id).toBe(wordB.id); // ratio 3/4 = 0.75
+      expect(stats.difficultWords[1].id).toBe(wordC.id); // ratio 2/3 = 0.667
+
+      // Recent reviews: sorted by reviewed_at DESC
+      expect(stats.recentReviews).toHaveLength(3);
+      expect(stats.recentReviews[0].word).toBe('resilient');
+      expect(stats.recentReviews[0].rating).toBe('good');
+      expect(stats.recentReviews[1].word).toBe('aberrant');
+      expect(stats.recentReviews[1].rating).toBe('again');
+      expect(stats.recentReviews[2].word).toBe('paradox');
+      expect(stats.recentReviews[2].rating).toBe('hard');
+    });
+  });
+
+  describe('removeWordFromFolder', () => {
+    it('removes word association from word_folders without deleting word or folder', async () => {
+      const folder = await repo.createFolder('TOEFL Vocab', '#f59e0b');
+      const word = await repo.createWord({
+        word: 'scrutinize',
+        meaning: 'to examine closely',
+        level: 'C1',
+        folderIds: [folder.id],
+      });
+
+      const wordBefore = await repo.getWordById(word.id);
+      expect(wordBefore!.folderIds).toContain(folder.id);
+
+      await repo.removeWordFromFolder(word.id, folder.id);
+
+      const wordAfter = await repo.getWordById(word.id);
+      expect(wordAfter).not.toBeNull();
+      expect(wordAfter!.folderIds).not.toContain(folder.id);
+
+      // Folder still exists
+      const folderAfter = await repo.getFolderById(folder.id);
+      expect(folderAfter).not.toBeNull();
+      expect(folderAfter!.wordCount).toBe(0);
+    });
+  });
+
+  describe('Local Data Management (exportData & restoreData)', () => {
+    it('exports all stores and restores them cleanly', async () => {
+      const folder = await repo.createFolder('Science', '#10b981');
+      const word = await repo.createWord({
+        word: 'quantum',
+        meaning: 'discrete quantity of energy',
+        level: 'B2',
+        folderIds: [folder.id],
+      });
+      await repo.processReview(word.id, 'good');
+
+      // Export
+      const exportPayload = await repo.exportData();
+      expect(exportPayload.schemaVersion).toBe(1);
+      expect(exportPayload.wordCount).toBe(1);
+      expect(exportPayload.data.words).toHaveLength(1);
+      expect(exportPayload.data.learning_states).toHaveLength(1);
+      expect(exportPayload.data.review_history).toHaveLength(1);
+      expect(exportPayload.data.folders).toHaveLength(1);
+      expect(exportPayload.data.word_folders).toHaveLength(1);
+
+      // Delete the word and folder
+      await repo.deleteWord(word.id);
+      await repo.deleteFolder(folder.id);
+      expect(await repo.getWords()).toHaveLength(0);
+
+      // Restore
+      await repo.restoreData(exportPayload);
+
+      // Verify restored data
+      const wordsAfter = await repo.getWords();
+      expect(wordsAfter).toHaveLength(1);
+      expect(wordsAfter[0].word).toBe('quantum');
+      expect(wordsAfter[0].folderIds).toContain(folder.id);
+      expect(wordsAfter[0].learning_state.review_count).toBe(1);
+
+      const foldersAfter = await repo.getFolders();
+      expect(foldersAfter.folders).toHaveLength(1);
+      expect(foldersAfter.folders[0].name).toBe('Science');
+    });
+
+    it('rejects invalid schemaVersion or corrupted data payload', async () => {
+      await expect(
+        repo.restoreData({
+          schemaVersion: 2,
+          exportedAt: new Date().toISOString(),
+          wordCount: 0,
+          data: {
+            words: [],
+            learning_states: [],
+            review_history: [],
+            folders: [],
+            word_folders: [],
+          },
+        })
+      ).rejects.toThrow('Unsupported schema version');
+
+      await expect(
+        repo.restoreData({
+          schemaVersion: 1,
+          exportedAt: new Date().toISOString(),
+          wordCount: 0,
+          data: {
+            words: [],
+            learning_states: [],
+            // missing review_history
+            folders: [],
+            word_folders: [],
+          } as any,
+        })
+      ).rejects.toThrow('Missing or invalid tables in data payload');
+    });
+  });
+
+  describe('Local CSV Word Import and Export', () => {
+    it('exports words matching folder filters and imports them back', async () => {
+      const folder = await repo.createFolder('Botany', '#059669');
+      const w1 = await repo.createWord({
+        word: 'photosynthesis',
+        meaning: 'process used by plants to convert light energy',
+        level: 'B2',
+        folderIds: [folder.id],
+      });
+      const w2 = await repo.createWord({
+        word: 'chlorophyll',
+        meaning: 'green pigment in plants',
+        level: 'C1',
+        folderIds: [folder.id],
+      });
+      const w3 = await repo.createWord({
+        word: 'stone',
+        meaning: 'hard solid non-metallic mineral matter',
+        level: 'A1',
+      });
+
+      // Export all words
+      const allCsv = await repo.exportWordsCsv();
+      expect(allCsv).toContain('photosynthesis');
+      expect(allCsv).toContain('chlorophyll');
+      expect(allCsv).toContain('stone');
+
+      // Export by folder
+      const folderCsv = await repo.exportWordsCsv(folder.id);
+      expect(folderCsv).toContain('photosynthesis');
+      expect(folderCsv).toContain('chlorophyll');
+      expect(folderCsv).not.toContain('stone');
+
+      // Export ungrouped
+      const ungroupedCsv = await repo.exportWordsCsv('ungrouped');
+      expect(ungroupedCsv).toContain('stone');
+      expect(ungroupedCsv).not.toContain('photosynthesis');
+
+      // Test import on a fresh repository
+      const testFactory = createInMemoryIDBFactory();
+      const cleanAdapter = new IndexedDbAdapter(`test_import_${generateId()}`, 1, testFactory);
+      const cleanRepo = new LocalRepository(cleanAdapter);
+
+      const importResult = await cleanRepo.importWordsCsv(allCsv);
+      expect(importResult.success).toBe(true);
+      expect(importResult.imported).toBe(3);
+      expect(importResult.skipped).toBe(0);
+
+      // Re-importing same CSV should detect duplicates and skip
+      const reimportResult = await cleanRepo.importWordsCsv(allCsv);
+      expect(reimportResult.success).toBe(true);
+      expect(reimportResult.imported).toBe(0);
+      expect(reimportResult.skipped).toBe(3);
+    });
+  });
 });
+

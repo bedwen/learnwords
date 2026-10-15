@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate, NavLink, Link, useLocation } from 'react-router-dom';
 import {
   Home as HomeIcon,
@@ -16,11 +17,26 @@ import { DataManagement } from './pages/DataManagement';
 import { ThemeToggle } from './components/ui/ThemeToggle';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ToastProvider } from './context/ToastContext';
+import { isLocalDatabaseInitialized, hydrateLocalDatabase } from './storage/syncHydrator';
 import { cn } from './lib/utils';
 
 function App() {
   const location = useLocation();
   const isStudy = location.pathname.startsWith('/study');
+
+  useEffect(() => {
+    async function initLocalStorage() {
+      try {
+        const initialized = await isLocalDatabaseInitialized();
+        if (!initialized) {
+          await hydrateLocalDatabase();
+        }
+      } catch {
+        // Silently tolerate server offline; client continues standalone
+      }
+    }
+    initLocalStorage();
+  }, []);
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(

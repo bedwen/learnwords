@@ -10,7 +10,11 @@ import {
   ActivityDay,
   CEFRLevel,
   ReviewRating,
+  DetailedStats,
+  ExportData,
+  CsvImportResult,
 } from '../types';
+import Papa from 'papaparse';
 import { LearningEngine } from '../learning/learningEngine';
 import {
   IndexedDbAdapter,
@@ -735,6 +739,457 @@ export class LocalRepository {
     };
   }
 
+  /**
+   * Computes comprehensive learning analytics matching server/services/home.ts.
+   */
+  async getDetailedStats(): Promise<DetailedStats> {
+    const [allWords, allStates, allHistory, allWordFolders] = await Promise.all([
+      this.adapter.getAll<Word>('words'),
+      this.adapter.getAll<LearningState>('learning_states'),
+      this.adapter.getAll<LocalReviewHistoryRecord>('review_history'),
+      this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
+    ]);
+
+    // 1. Total words
+    const totalWords = allWords.length;
+
+    // 2. CEFR Distribution
+    const cefrMap = new Map<CEFRLevel, number>();
+    for (const word of allWords) {
+      cefrMap.set(word.level, (cefrMap.get(word.level) || 0) + 1);
+    }
+    const cefrDistribution = Array.from(cefrMap.entries()).map(([level, count]) => ({
+      level,
+      count,
+    }));
+
+    // 3. Mastery Distribution
+    const masteryMap = new Map<number, number>();
+    for (const state of allStates) {
+      masteryMap.set(state.mastery, (masteryMap.get(state.mastery) || 0) + 1);
+    }
+    const masteryDistribution = Array.from(masteryMap.entries()).map(([mastery, count]) => ({
+      mastery,
+      count,
+    }));
+
+    // 4. Accuracy and totals
+    let totalReviews = 0;
+    let totalCorrect = 0;
+    let totalWrong = 0;
+    for (const state of allStates) {
+      totalReviews += state.review_count || 0;
+      totalCorrect += state.correct_count || 0;
+      totalWrong += state.wrong_count || 0;
+    }
+    const accuracy = totalReviews > 0 ? (totalCorrect / totalReviews) * 100 : 0;
+
+    // 5. Difficult Words
+    const stateMap = new Map<string, LearningState>();
+    for (const s of allStates) {
+      stateMap.set(s.word_id, s);
+    }
+
+    const folderMap = new Map<string, string[]>();
+    for (const wf of allWordFolders) {
+      const existing = folderMap.get(wf.word_id) || [];
+      existing.push(wf.folder_id);
+      folderMap.set(wf.word_id, existing);
+    }
+
+    const difficultCandidates: WordWithState[] = [];
+    for (const word of allWords) {
+      const state = stateMap.get(word.id);
+      if (state && state.wrong_count > state.correct_count && state.review_count >= 3) {
+        difficultCandidates.push({
+          ...word,
+          learning_state: state,
+          folderIds: folderMap.get(word.id) || [],
+        });
+      }
+    }
+    difficultCandidates.sort((a, b) => {
+      const ratioA = a.learning_state.wrong_count / a.learning_state.review_count;
+      const ratioB = b.learning_state.wrong_count / b.learning_state.review_count;
+      return ratioB - ratioA;
+    });
+    const difficultWords = difficultCandidates.slice(0, 10);
+
+    // 6. Recent Reviews
+    const wordMap = new Map<string, Word>();
+    for (const word of allWords) {
+      wordMap.set(word.id, word);
+    }
+
+    const sortedHistory = [...allHistory].sort((a, b) =>
+      b.reviewed_at.localeCompare(a.reviewed_at)
+    );
+
+    const recentReviews: {
+      word: string;
+      level: CEFRLevel;
+      rating: ReviewRating;
+      reviewed_at: string;
+    }[] = [];
+
+    for (const rh of sortedHistory) {
+      const w = wordMap.get(rh.word_id);
+      if (w) {
+        recentReviews.push({
+          word: w.word,
+          level: w.level,
+          rating: rh.rating,
+          reviewed_at: rh.reviewed_at,
+        });
+        if (recentReviews.length >= 10) break;
+      }
+    }
+
+    return {
+      totalWords,
+      cefrDistribution,
+      masteryDistribution,
+      totalReviews,
+      totalCorrect,
+      totalWrong,
+      accuracy: Math.round(accuracy),
+      difficultWords,
+      recentReviews,
+    };
+  }
+
+  /**
+   * Remove a word from a folder.
+   */
+  async removeWordFromFolder(wordId: string, folderId: string): Promise<void> {
+    const recordId = `${wordId}_${folderId}`;
+    await this.adapter.delete('word_folders', recordId);
+  }
+
+  /**
+   * Complete local database export structure.
+   */
+  async exportData(): Promise<ExportData> {
+    const [words, learning_states, review_history, folders, word_folders] = await Promise.all([
+      this.adapter.getAll<Word>('words'),
+      this.adapter.getAll<LearningState>('learning_states'),
+      this.adapter.getAll<LocalReviewHistoryRecord>('review_history'),
+      this.adapter.getAll<Folder>('folders'),
+      this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
+    ]);
+
+    return {
+      schemaVersion: 1,
+      exportedAt: new Date().toISOString(),
+      wordCount: words.length,
+      data: {
+        words,
+        learning_states,
+        review_history,
+        folders,
+        word_folders,
+      },
+    };
+  }
+
+  /**
+   * Restore local database from an ExportData backup payload.
+   */
+  async restoreData(data: ExportData): Promise<void> {
+    if (data.schemaVersion !== 1) {
+      throw new Error('Unsupported schema version');
+    }
+    if (!data.data || typeof data.data !== 'object') {
+      throw new Error('Invalid data payload');
+    }
+    const { words, learning_states, review_history, folders, word_folders } = data.data;
+    if (
+      !Array.isArray(words) ||
+      !Array.isArray(learning_states) ||
+      !Array.isArray(review_history) ||
+      !Array.isArray(folders) ||
+      !Array.isArray(word_folders)
+    ) {
+      throw new Error('Missing or invalid tables in data payload');
+    }
+
+    // Clear stores
+    await Promise.all([
+      this.adapter.clear('word_folders'),
+      this.adapter.clear('review_history'),
+      this.adapter.clear('learning_states'),
+      this.adapter.clear('folders'),
+      this.adapter.clear('words'),
+    ]);
+
+    // Insert restored data
+    await Promise.all([
+      this.adapter.putMany('words', words),
+      this.adapter.putMany('learning_states', learning_states),
+      this.adapter.putMany('review_history', review_history),
+      this.adapter.putMany('folders', folders),
+      this.adapter.putMany('word_folders', word_folders),
+    ]);
+  }
+
+  /**
+   * Exports words from IndexedDB formatted as CSV.
+   */
+  async exportWordsCsv(folderId?: string): Promise<string> {
+    const [allWords, allWordFolders] = await Promise.all([
+      this.adapter.getAll<Word>('words'),
+      this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
+    ]);
+
+    const folderMap = new Map<string, Set<string>>();
+    for (const wf of allWordFolders) {
+      if (!folderMap.has(wf.folder_id)) {
+        folderMap.set(wf.folder_id, new Set());
+      }
+      folderMap.get(wf.folder_id)!.add(wf.word_id);
+    }
+
+    const wordsWithFolder = new Set<string>();
+    for (const wf of allWordFolders) {
+      wordsWithFolder.add(wf.word_id);
+    }
+
+    let filteredWords: Word[] = [];
+    if (folderId === 'ungrouped') {
+      filteredWords = allWords.filter((w) => !wordsWithFolder.has(w.id));
+    } else if (folderId && folderId !== 'all') {
+      const wordIdsInFolder = folderMap.get(folderId) || new Set();
+      filteredWords = allWords.filter((w) => wordIdsInFolder.has(w.id));
+    } else {
+      filteredWords = [...allWords];
+    }
+
+    filteredWords.sort((a, b) => a.word.localeCompare(b.word));
+
+    if (filteredWords.length === 0) {
+      return '';
+    }
+
+    const cleanedRows = filteredWords.map((w) => ({
+      word: w.word ?? '',
+      meaning: w.meaning ?? '',
+      level: w.level ?? '',
+      part_of_speech: w.part_of_speech ?? '',
+      example_sentence: w.example_sentence ?? '',
+      example_translation: w.example_translation ?? '',
+      notes: w.notes ?? '',
+    }));
+
+    return Papa.unparse(cleanedRows);
+  }
+
+  /**
+   * Parses CSV rows and batch inserts new words into IndexedDB.
+   */
+  async importWordsCsv(csvContent: string): Promise<CsvImportResult> {
+    const result: CsvImportResult = {
+      success: true,
+      imported: 0,
+      skipped: 0,
+      errors: [],
+    };
+
+    const parsed = Papa.parse(csvContent, {
+      header: true,
+      skipEmptyLines: true,
+    });
+
+    if (parsed.errors.length > 0) {
+      result.success = false;
+      result.errors.push(`CSV Parse Error: ${parsed.errors[0].message}`);
+      return result;
+    }
+
+    const rows = parsed.data as any[];
+
+    if (rows.length === 0) {
+      result.success = false;
+      result.errors.push('The CSV file is empty.');
+      return result;
+    }
+
+    if (rows.length > 5000) {
+      result.success = false;
+      result.errors.push('Maximum limit of 5000 words exceeded.');
+      return result;
+    }
+
+    const allowedColumns = [
+      'word',
+      'meaning',
+      'level',
+      'part_of_speech',
+      'example_sentence',
+      'example_translation',
+      'notes',
+    ];
+    const actualColumns = parsed.meta.fields || [];
+
+    for (const col of actualColumns) {
+      if (!allowedColumns.includes(col)) {
+        result.success = false;
+        result.errors.push(
+          `Invalid column found: '${col}'. Allowed columns are: ${allowedColumns.join(', ')}`
+        );
+        return result;
+      }
+    }
+
+    const validRows: any[] = [];
+    const allowedLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const allowedPos = [
+      'noun',
+      'verb',
+      'adjective',
+      'adverb',
+      'preposition',
+      'conjunction',
+      'pronoun',
+      'interjection',
+      'determiner',
+      'phrase',
+    ];
+
+    const stripControlChars = (str: any) => {
+      if (typeof str !== 'string') return null;
+      return str.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').trim();
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2;
+
+      const word = stripControlChars(row.word);
+      if (!word || word.length === 0) {
+        result.errors.push(`Row ${rowNum}: 'word' is required.`);
+        continue;
+      }
+      if (word.length > 200) {
+        result.errors.push(`Row ${rowNum}: 'word' exceeds 200 characters.`);
+        continue;
+      }
+
+      const meaning = stripControlChars(row.meaning);
+      if (!meaning || meaning.length === 0) {
+        result.errors.push(`Row ${rowNum}: 'meaning' is required.`);
+        continue;
+      }
+      if (meaning.length > 500) {
+        result.errors.push(`Row ${rowNum}: 'meaning' exceeds 500 characters.`);
+        continue;
+      }
+
+      const level = stripControlChars(row.level)?.toUpperCase();
+      if (!level || !allowedLevels.includes(level)) {
+        result.errors.push(`Row ${rowNum}: 'level' must be one of ${allowedLevels.join(', ')}.`);
+        continue;
+      }
+
+      let pos: string | null = stripControlChars(row.part_of_speech)?.toLowerCase() || null;
+      if (pos && !allowedPos.includes(pos)) {
+        result.errors.push(
+          `Row ${rowNum}: 'part_of_speech' must be one of ${allowedPos.join(', ')} or empty.`
+        );
+        continue;
+      }
+
+
+      const exSen = stripControlChars(row.example_sentence);
+      if (exSen && exSen.length > 1000) {
+        result.errors.push(`Row ${rowNum}: 'example_sentence' exceeds 1000 characters.`);
+        continue;
+      }
+
+      const exTrans = stripControlChars(row.example_translation);
+      if (exTrans && exTrans.length > 1000) {
+        result.errors.push(`Row ${rowNum}: 'example_translation' exceeds 1000 characters.`);
+        continue;
+      }
+
+      const notes = stripControlChars(row.notes);
+      if (notes && notes.length > 2000) {
+        result.errors.push(`Row ${rowNum}: 'notes' exceeds 2000 characters.`);
+        continue;
+      }
+
+      validRows.push({
+        word,
+        meaning,
+        level,
+        pos,
+        exSen: exSen || null,
+        exTrans: exTrans || null,
+        notes: notes || null,
+      });
+    }
+
+    if (result.errors.length > 0) {
+      result.success = false;
+      return result;
+    }
+
+    const existingWords = await this.adapter.getAll<Word>('words');
+    const existingWordsLower = new Set(existingWords.map((w) => w.word.toLowerCase()));
+
+    const now = new Date().toISOString();
+    const wordsToPut: Word[] = [];
+    const statesToPut: LearningState[] = [];
+
+    for (const r of validRows) {
+      if (existingWordsLower.has(r.word.toLowerCase())) {
+        result.skipped++;
+        continue;
+      }
+
+      existingWordsLower.add(r.word.toLowerCase());
+
+      const wordId = generateId();
+      const stateId = generateId();
+
+      wordsToPut.push({
+        id: wordId,
+        word: r.word,
+        meaning: r.meaning,
+        level: r.level as CEFRLevel,
+        part_of_speech: r.pos,
+        example_sentence: r.exSen,
+        example_translation: r.exTrans,
+        notes: r.notes,
+        created_at: now,
+        updated_at: now,
+      });
+
+      statesToPut.push({
+        id: stateId,
+        word_id: wordId,
+        mastery: 0,
+        interval_step: 0,
+        next_review: now,
+        last_reviewed: null,
+        review_count: 0,
+        correct_count: 0,
+        wrong_count: 0,
+        consecutive_correct: 0,
+      });
+
+      result.imported++;
+    }
+
+    if (wordsToPut.length > 0) {
+      await Promise.all([
+        this.adapter.putMany('words', wordsToPut),
+        this.adapter.putMany('learning_states', statesToPut),
+      ]);
+    }
+
+    return result;
+  }
+
   // --- Internal Helpers ---
 
   private async getLearningStateByWordId(wordId: string, wordCreatedAt: string): Promise<LearningState> {
@@ -824,3 +1279,11 @@ export const batchUpdateLocalFolder = (
   action: 'add' | 'remove'
 ) => localRepository.batchUpdateFolder(wordIds, folderId, action);
 export const getLocalHomeSummary = () => localRepository.getHomeSummary();
+export const getLocalDetailedStats = () => localRepository.getDetailedStats();
+export const removeLocalWordFromFolder = (wordId: string, folderId: string) =>
+  localRepository.removeWordFromFolder(wordId, folderId);
+export const exportLocalData = () => localRepository.exportData();
+export const restoreLocalData = (data: ExportData) => localRepository.restoreData(data);
+export const exportLocalWordsCsv = (folderId?: string) => localRepository.exportWordsCsv(folderId);
+export const importLocalWordsCsv = (csvText: string) => localRepository.importWordsCsv(csvText);
+

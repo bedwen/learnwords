@@ -135,3 +135,24 @@ export interface FolderListResponse {
   folders: Folder[];
   ungroupedCount: number;
 }
+
+export interface ExportData {
+  schemaVersion: number;
+  exportedAt: string;
+  wordCount: number;
+  data: {
+    words: any[];
+    learning_states: any[];
+    review_history: any[];
+    folders: any[];
+    word_folders: any[];
+  };
+}
+
+export interface CsvImportResult {
+  success: boolean;
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
