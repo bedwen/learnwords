@@ -1,9 +1,6 @@
-import { LearningState, ReviewRating } from '../types';
+import { LearningState, ReviewRating, ReviewHistoryRecord } from '../types';
 
-export interface ReviewHistoryRecord {
-  rating: ReviewRating;
-  reviewed_at: string;
-}
+export type { ReviewHistoryRecord };
 
 export interface EngineResult {
   mastery: number;

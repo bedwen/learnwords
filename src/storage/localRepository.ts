@@ -13,6 +13,8 @@ import {
   DetailedStats,
   ExportData,
   CsvImportResult,
+  SyncBundle,
+  SyncMergeResult,
 } from '../types';
 import Papa from 'papaparse';
 import { LearningEngine } from '../learning/learningEngine';
@@ -22,6 +24,7 @@ import {
   LocalWordFolderRecord,
   LocalReviewHistoryRecord,
 } from './indexedDb';
+import { executeSmartMerge } from './smartMerge';
 
 export const CEFR_LEVELS: CEFRLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
@@ -70,6 +73,10 @@ export class LocalRepository {
       this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
     ]);
 
+    const activeWords = allWords.filter(
+      (w) => w.deleted_at === null || w.deleted_at === undefined
+    );
+
     const stateMap = new Map<string, LearningState>();
     for (const state of allStates) {
       stateMap.set(state.word_id, state);
@@ -85,7 +92,7 @@ export class LocalRepository {
     // Join and filter candidates
     const candidates: WordWithState[] = [];
 
-    for (const word of allWords) {
+    for (const word of activeWords) {
       const state = stateMap.get(word.id) || this.createDefaultState(word.id, word.created_at);
       const folderIds = folderMap.get(word.id) || [];
 
@@ -166,6 +173,7 @@ export class LocalRepository {
 
     const newHistoryRecord: LocalReviewHistoryRecord = {
       id: generateId(),
+      sync_id: generateId(),
       word_id: wordId,
       rating,
       mastery_before: currentState.mastery,
@@ -204,6 +212,10 @@ export class LocalRepository {
       this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
     ]);
 
+    const activeWords = allWords.filter(
+      (w) => w.deleted_at === null || w.deleted_at === undefined
+    );
+
     const stateMap = new Map<string, LearningState>();
     for (const state of allStates) {
       stateMap.set(state.word_id, state);
@@ -229,7 +241,7 @@ export class LocalRepository {
 
     let results: WordWithState[] = [];
 
-    for (const word of allWords) {
+    for (const word of activeWords) {
       const state = stateMap.get(word.id) || this.createDefaultState(word.id, word.created_at);
       const folderIds = folderMap.get(word.id) || [];
 
@@ -283,10 +295,11 @@ export class LocalRepository {
 
   /**
    * Get single word by ID with full state and folder associations.
+   * Returns null if word does not exist or has been soft-deleted.
    */
   async getWordById(id: string): Promise<WordWithState | null> {
     const word = await this.adapter.get<Word>('words', id);
-    if (!word) return null;
+    if (!word || (word.deleted_at !== null && word.deleted_at !== undefined)) return null;
 
     const state = await this.getLearningStateByWordId(id, word.created_at);
     const folderIds = await this.getWordFolderIds(id);
@@ -300,14 +313,17 @@ export class LocalRepository {
 
   /**
    * Creates a new word, initial learning state, and folder links.
+   * Automatically populates sync_id, updated_at (epoch ms), and deleted_at (null).
    */
   async createWord(data: CreateWordDto): Promise<WordWithState> {
     const wordId = generateId();
     const stateId = generateId();
     const nowIso = new Date().toISOString();
+    const nowEpoch = Date.now();
 
     const word: Word = {
       id: wordId,
+      sync_id: generateId(),
       word: data.word.trim(),
       meaning: data.meaning.trim(),
       level: data.level,
@@ -316,7 +332,8 @@ export class LocalRepository {
       example_translation: data.example_translation?.trim() || null,
       notes: data.notes?.trim() || null,
       created_at: nowIso,
-      updated_at: nowIso,
+      updated_at: nowEpoch,
+      deleted_at: null,
     };
 
     const learningState: LearningState = {
@@ -362,9 +379,7 @@ export class LocalRepository {
    */
   async updateWord(id: string, data: UpdateWordDto): Promise<WordWithState | null> {
     const existing = await this.adapter.get<Word>('words', id);
-    if (!existing) return null;
-
-    const nowIso = new Date().toISOString();
+    if (!existing || (existing.deleted_at !== null && existing.deleted_at !== undefined)) return null;
 
     const updatedWord: Word = {
       ...existing,
@@ -387,7 +402,9 @@ export class LocalRepository {
         data.notes !== undefined
           ? data.notes ? data.notes.trim() : null
           : existing.notes,
-      updated_at: nowIso,
+      updated_at: Date.now(),
+      sync_id: existing.sync_id || generateId(),
+      deleted_at: existing.deleted_at ?? null,
     };
 
     await this.adapter.put('words', updatedWord);
@@ -401,35 +418,17 @@ export class LocalRepository {
   }
 
   /**
-   * Cascading word deletion:
-   * Removes word, associated learning state(s), review history, and word_folders.
+   * Soft delete word:
+   * Marks deleted_at = Date.now(), updated_at = Date.now().
+   * Preserves word record in IndexedDB for sync propagation while hiding it from active UI queries.
    */
   async deleteWord(id: string): Promise<boolean> {
     const word = await this.adapter.get<Word>('words', id);
-    if (!word) return false;
+    if (!word || (word.deleted_at !== null && word.deleted_at !== undefined)) return false;
 
-    // Fetch and remove cascading associations
-    const [states, history, wordFolders] = await Promise.all([
-      this.adapter.queryByIndex<LearningState>('learning_states', 'word_id', id),
-      this.adapter.queryByIndex<LocalReviewHistoryRecord>('review_history', 'word_id', id),
-      this.adapter.queryByIndex<LocalWordFolderRecord>('word_folders', 'word_id', id),
-    ]);
-
-    const deletes: Promise<void>[] = [
-      this.adapter.delete('words', id),
-    ];
-
-    for (const state of states) {
-      deletes.push(this.adapter.delete('learning_states', state.id));
-    }
-    for (const h of history) {
-      deletes.push(this.adapter.delete('review_history', h.id));
-    }
-    for (const wf of wordFolders) {
-      deletes.push(this.adapter.delete('word_folders', wf.id));
-    }
-
-    await Promise.all(deletes);
+    word.deleted_at = Date.now();
+    word.updated_at = Date.now();
+    await this.adapter.put('words', word);
     return true;
   }
 
@@ -444,13 +443,13 @@ export class LocalRepository {
     if (uniqueIds.length === 0) return 0;
 
     let updatedCount = 0;
-    const nowIso = new Date().toISOString();
+    const nowEpoch = Date.now();
 
     for (const id of uniqueIds) {
       const word = await this.adapter.get<Word>('words', id);
-      if (word) {
+      if (word && (word.deleted_at === null || word.deleted_at === undefined)) {
         word.level = level;
-        word.updated_at = nowIso;
+        word.updated_at = nowEpoch;
         await this.adapter.put('words', word);
         updatedCount++;
       }
@@ -504,7 +503,8 @@ export class LocalRepository {
   }
 
   /**
-   * Lists all folders with exact word counts, plus ungrouped count.
+   * Lists all active folders with exact word counts, plus ungrouped count.
+   * Soft-deleted folders and words are filtered out.
    */
   async getFolders(): Promise<FolderListResponse> {
     const [allFolders, allWords, allWordFolders] = await Promise.all([
@@ -513,18 +513,28 @@ export class LocalRepository {
       this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
     ]);
 
+    const activeFolders = allFolders.filter(
+      (f) => f.deleted_at === null || f.deleted_at === undefined
+    );
+    const activeWords = allWords.filter(
+      (w) => w.deleted_at === null || w.deleted_at === undefined
+    );
+    const activeWordIds = new Set(activeWords.map((w) => w.id));
+
     // Word counts per folder
     const folderCountMap = new Map<string, number>();
     const wordsWithFolder = new Set<string>();
 
     for (const wf of allWordFolders) {
-      folderCountMap.set(wf.folder_id, (folderCountMap.get(wf.folder_id) || 0) + 1);
-      wordsWithFolder.add(wf.word_id);
+      if (activeWordIds.has(wf.word_id)) {
+        folderCountMap.set(wf.folder_id, (folderCountMap.get(wf.folder_id) || 0) + 1);
+        wordsWithFolder.add(wf.word_id);
+      }
     }
 
-    const ungroupedCount = allWords.filter(w => !wordsWithFolder.has(w.id)).length;
+    const ungroupedCount = activeWords.filter((w) => !wordsWithFolder.has(w.id)).length;
 
-    const folders: Folder[] = allFolders.map((f) => ({
+    const folders: Folder[] = activeFolders.map((f) => ({
       ...f,
       wordCount: folderCountMap.get(f.id) || 0,
     }));
@@ -540,10 +550,16 @@ export class LocalRepository {
 
   /**
    * Get single folder by ID.
+   * Returns null if folder does not exist or has been soft-deleted.
    */
   async getFolderById(id: string): Promise<Folder | null> {
     const folder = await this.adapter.get<Folder>('folders', id);
-    if (!folder) return null;
+    if (!folder || (folder.deleted_at !== null && folder.deleted_at !== undefined)) return null;
+
+    const allWords = await this.adapter.getAll<Word>('words');
+    const activeWordIds = new Set(
+      allWords.filter((w) => w.deleted_at === null || w.deleted_at === undefined).map((w) => w.id)
+    );
 
     const allWordFolders = await this.adapter.queryByIndex<LocalWordFolderRecord>(
       'word_folders',
@@ -551,26 +567,32 @@ export class LocalRepository {
       id
     );
 
+    const activeCount = allWordFolders.filter((wf) => activeWordIds.has(wf.word_id)).length;
+
     return {
       ...folder,
-      wordCount: allWordFolders.length,
+      wordCount: activeCount,
     };
   }
 
   /**
    * Create new folder.
+   * Automatically populates sync_id, updated_at (epoch ms), and deleted_at (null).
    */
   async createFolder(name: string, color = '#94a3b8'): Promise<Folder> {
     const folderId = generateId();
     const nowIso = new Date().toISOString();
+    const nowEpoch = Date.now();
 
     const folder: Folder = {
       id: folderId,
+      sync_id: generateId(),
       name: name.trim(),
       color: color.trim() || '#94a3b8',
       wordCount: 0,
       created_at: nowIso,
-      updated_at: nowIso,
+      updated_at: nowEpoch,
+      deleted_at: null,
     };
 
     await this.adapter.put('folders', folder);
@@ -584,12 +606,13 @@ export class LocalRepository {
     const folder = await this.getFolderById(id);
     if (!folder) return null;
 
-    const nowIso = new Date().toISOString();
     const updated: Folder = {
       ...folder,
       name: data.name !== undefined ? data.name.trim() : folder.name,
       color: data.color !== undefined ? data.color.trim() : folder.color,
-      updated_at: nowIso,
+      updated_at: Date.now(),
+      sync_id: folder.sync_id || generateId(),
+      deleted_at: folder.deleted_at ?? null,
     };
 
     await this.adapter.put('folders', updated);
@@ -597,16 +620,19 @@ export class LocalRepository {
   }
 
   /**
-   * Delete folder. Words are preserved and become ungrouped.
+   * Soft delete folder:
+   * Sets deleted_at = Date.now(), updated_at = Date.now().
+   * Deleting a folder ungroups words (cascade-removes word_folders links).
    */
   async deleteFolder(id: string): Promise<boolean> {
     const folder = await this.adapter.get<Folder>('folders', id);
-    if (!folder) return false;
+    if (!folder || (folder.deleted_at !== null && folder.deleted_at !== undefined)) return false;
 
-    // Delete folder
-    await this.adapter.delete('folders', id);
+    folder.deleted_at = Date.now();
+    folder.updated_at = Date.now();
+    await this.adapter.put('folders', folder);
 
-    // Delete folder links (words remain intact)
+    // Delete folder links (words remain intact and become ungrouped)
     const links = await this.adapter.queryByIndex<LocalWordFolderRecord>(
       'word_folders',
       'folder_id',
@@ -627,8 +653,12 @@ export class LocalRepository {
       this.adapter.getAll<LocalReviewHistoryRecord>('review_history'),
     ]);
 
+    const activeWords = allWords.filter(
+      (w) => w.deleted_at === null || w.deleted_at === undefined
+    );
+
     const nowIso = new Date().toISOString();
-    const totalWords = allWords.length;
+    const totalWords = activeWords.length;
 
     // Due for review: next_review <= now OR mastery = 0
     let dueForReview = 0;
@@ -637,7 +667,7 @@ export class LocalRepository {
       stateMap.set(state.word_id, state);
     }
 
-    for (const word of allWords) {
+    for (const word of activeWords) {
       const state = stateMap.get(word.id);
       if (!state || state.next_review <= nowIso || state.mastery === 0) {
         dueForReview++;
@@ -649,7 +679,7 @@ export class LocalRepository {
       let levelTotal = 0;
       let mastered = 0;
 
-      for (const word of allWords) {
+      for (const word of activeWords) {
         if (word.level === level) {
           levelTotal++;
           const st = stateMap.get(word.id);
@@ -674,7 +704,7 @@ export class LocalRepository {
     }
 
     const wordsMap = new Map<string, number>();
-    for (const w of allWords) {
+    for (const w of activeWords) {
       const dateStr = w.created_at.split('T')[0];
       wordsMap.set(dateStr, (wordsMap.get(dateStr) || 0) + 1);
     }
@@ -750,12 +780,17 @@ export class LocalRepository {
       this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
     ]);
 
+    const activeWords = allWords.filter(
+      (w) => w.deleted_at === null || w.deleted_at === undefined
+    );
+    const activeWordIds = new Set(activeWords.map((w) => w.id));
+
     // 1. Total words
-    const totalWords = allWords.length;
+    const totalWords = activeWords.length;
 
     // 2. CEFR Distribution
     const cefrMap = new Map<CEFRLevel, number>();
-    for (const word of allWords) {
+    for (const word of activeWords) {
       cefrMap.set(word.level, (cefrMap.get(word.level) || 0) + 1);
     }
     const cefrDistribution = Array.from(cefrMap.entries()).map(([level, count]) => ({
@@ -766,7 +801,9 @@ export class LocalRepository {
     // 3. Mastery Distribution
     const masteryMap = new Map<number, number>();
     for (const state of allStates) {
-      masteryMap.set(state.mastery, (masteryMap.get(state.mastery) || 0) + 1);
+      if (activeWordIds.has(state.word_id)) {
+        masteryMap.set(state.mastery, (masteryMap.get(state.mastery) || 0) + 1);
+      }
     }
     const masteryDistribution = Array.from(masteryMap.entries()).map(([mastery, count]) => ({
       mastery,
@@ -778,9 +815,11 @@ export class LocalRepository {
     let totalCorrect = 0;
     let totalWrong = 0;
     for (const state of allStates) {
-      totalReviews += state.review_count || 0;
-      totalCorrect += state.correct_count || 0;
-      totalWrong += state.wrong_count || 0;
+      if (activeWordIds.has(state.word_id)) {
+        totalReviews += state.review_count || 0;
+        totalCorrect += state.correct_count || 0;
+        totalWrong += state.wrong_count || 0;
+      }
     }
     const accuracy = totalReviews > 0 ? (totalCorrect / totalReviews) * 100 : 0;
 
@@ -798,7 +837,7 @@ export class LocalRepository {
     }
 
     const difficultCandidates: WordWithState[] = [];
-    for (const word of allWords) {
+    for (const word of activeWords) {
       const state = stateMap.get(word.id);
       if (state && state.wrong_count > state.correct_count && state.review_count >= 3) {
         difficultCandidates.push({
@@ -817,7 +856,7 @@ export class LocalRepository {
 
     // 6. Recent Reviews
     const wordMap = new Map<string, Word>();
-    for (const word of allWords) {
+    for (const word of activeWords) {
       wordMap.set(word.id, word);
     }
 
@@ -934,12 +973,17 @@ export class LocalRepository {
 
   /**
    * Exports words from IndexedDB formatted as CSV.
+   * Only active (non-deleted) words are exported.
    */
   async exportWordsCsv(folderId?: string): Promise<string> {
     const [allWords, allWordFolders] = await Promise.all([
       this.adapter.getAll<Word>('words'),
       this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
     ]);
+
+    const activeWords = allWords.filter(
+      (w) => w.deleted_at === null || w.deleted_at === undefined
+    );
 
     const folderMap = new Map<string, Set<string>>();
     for (const wf of allWordFolders) {
@@ -956,12 +1000,12 @@ export class LocalRepository {
 
     let filteredWords: Word[] = [];
     if (folderId === 'ungrouped') {
-      filteredWords = allWords.filter((w) => !wordsWithFolder.has(w.id));
+      filteredWords = activeWords.filter((w) => !wordsWithFolder.has(w.id));
     } else if (folderId && folderId !== 'all') {
       const wordIdsInFolder = folderMap.get(folderId) || new Set();
-      filteredWords = allWords.filter((w) => wordIdsInFolder.has(w.id));
+      filteredWords = activeWords.filter((w) => wordIdsInFolder.has(w.id));
     } else {
-      filteredWords = [...allWords];
+      filteredWords = [...activeWords];
     }
 
     filteredWords.sort((a, b) => a.word.localeCompare(b.word));
@@ -1098,7 +1142,6 @@ export class LocalRepository {
         continue;
       }
 
-
       const exSen = stripControlChars(row.example_sentence);
       if (exSen && exSen.length > 1000) {
         result.errors.push(`Row ${rowNum}: 'example_sentence' exceeds 1000 characters.`);
@@ -1133,10 +1176,14 @@ export class LocalRepository {
       return result;
     }
 
-    const existingWords = await this.adapter.getAll<Word>('words');
+    const allWords = await this.adapter.getAll<Word>('words');
+    const existingWords = allWords.filter(
+      (w) => w.deleted_at === null || w.deleted_at === undefined
+    );
     const existingWordsLower = new Set(existingWords.map((w) => w.word.toLowerCase()));
 
     const now = new Date().toISOString();
+    const nowEpoch = Date.now();
     const wordsToPut: Word[] = [];
     const statesToPut: LearningState[] = [];
 
@@ -1153,6 +1200,7 @@ export class LocalRepository {
 
       wordsToPut.push({
         id: wordId,
+        sync_id: generateId(),
         word: r.word,
         meaning: r.meaning,
         level: r.level as CEFRLevel,
@@ -1161,7 +1209,8 @@ export class LocalRepository {
         example_translation: r.exTrans,
         notes: r.notes,
         created_at: now,
-        updated_at: now,
+        updated_at: nowEpoch,
+        deleted_at: null,
       });
 
       statesToPut.push({
@@ -1188,6 +1237,51 @@ export class LocalRepository {
     }
 
     return result;
+  }
+
+  /**
+   * Exports full portable SyncBundle containing node metadata, timestamp, words,
+   * folders, word_folders junctions, and review history (including soft-deleted records for sync).
+   */
+  async exportSyncBundle(): Promise<SyncBundle> {
+    const [words, folders, wordFolders, reviewHistory] = await Promise.all([
+      this.adapter.getAll<Word>('words'),
+      this.adapter.getAll<Folder>('folders'),
+      this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
+      this.adapter.getAll<LocalReviewHistoryRecord>('review_history'),
+    ]);
+
+    let deviceId = 'local-device';
+    if (typeof localStorage !== 'undefined') {
+      let storedId = localStorage.getItem('learnwords-device-id');
+      if (!storedId) {
+        storedId = generateId();
+        localStorage.setItem('learnwords-device-id', storedId);
+      }
+      deviceId = storedId;
+    } else {
+      deviceId = generateId();
+    }
+
+    return {
+      version: 1,
+      deviceId,
+      exportedAt: new Date().toISOString(),
+      words,
+      folders,
+      word_folders: wordFolders.map((wf) => ({
+        word_id: wf.word_id,
+        folder_id: wf.folder_id,
+      })),
+      review_history: reviewHistory,
+    };
+  }
+
+  /**
+   * Executes pure TypeScript Smart Merge with an incoming SyncBundle.
+   */
+  async mergeSyncBundle(bundle: SyncBundle): Promise<SyncMergeResult> {
+    return executeSmartMerge(this.adapter, bundle);
   }
 
   // --- Internal Helpers ---
@@ -1286,4 +1380,6 @@ export const exportLocalData = () => localRepository.exportData();
 export const restoreLocalData = (data: ExportData) => localRepository.restoreData(data);
 export const exportLocalWordsCsv = (folderId?: string) => localRepository.exportWordsCsv(folderId);
 export const importLocalWordsCsv = (csvText: string) => localRepository.importWordsCsv(csvText);
+export const exportLocalSyncBundle = () => localRepository.exportSyncBundle();
+export const mergeLocalSyncBundle = (bundle: SyncBundle) => localRepository.mergeSyncBundle(bundle);
 

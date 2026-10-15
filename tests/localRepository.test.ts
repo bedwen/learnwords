@@ -224,7 +224,7 @@ describe('LocalRepository & Autonomous Client-Side Storage', () => {
   });
 
   describe('Cascade Deletion & Integrity Invariants', () => {
-    it('completely cascades delete across learning_states, review_history, and word_folders', async () => {
+    it('performs soft-delete on word, hiding it from queries while preserving history for sync propagation', async () => {
       const folder = await repo.createFolder('GRE Prep', '#10b981');
       const word = await repo.createWord({
         word: 'cacophony',
@@ -249,23 +249,22 @@ describe('LocalRepository & Autonomous Client-Side Storage', () => {
         await adapter.queryByIndex('word_folders', 'word_id', word.id)
       ).toHaveLength(1);
 
-      // Delete the word
+      // Delete the word (soft delete)
       const deleted = await repo.deleteWord(word.id);
       expect(deleted).toBe(true);
 
-      // Verify cascading removal
-      expect(await adapter.get('words', word.id)).toBeUndefined();
-      expect(
-        await adapter.queryByIndex('learning_states', 'word_id', word.id)
-      ).toHaveLength(0);
-      expect(
-        await adapter.queryByIndex('review_history', 'word_id', word.id)
-      ).toHaveLength(0);
-      expect(
-        await adapter.queryByIndex('word_folders', 'word_id', word.id)
-      ).toHaveLength(0);
+      // Verify soft deletion in storage (preserved for sync bundle)
+      const storedWord = await adapter.get<Word>('words', word.id);
+      expect(storedWord).toBeDefined();
+      expect(storedWord!.deleted_at).toBeTypeOf('number');
+      expect(storedWord!.deleted_at!).toBeGreaterThan(0);
 
-      // Verify folder itself was NOT deleted
+      // Verify word is hidden from active UI queries
+      expect(await repo.getWordById(word.id)).toBeNull();
+      const activeWords = await repo.getWords();
+      expect(activeWords.find((w) => w.id === word.id)).toBeUndefined();
+
+      // Verify folder active word count reflects the deletion
       const existingFolder = await repo.getFolderById(folder.id);
       expect(existingFolder).not.toBeNull();
       expect(existingFolder!.wordCount).toBe(0);
