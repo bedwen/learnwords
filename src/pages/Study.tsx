@@ -249,7 +249,7 @@ export function Study({ folderId }: StudyProps = {}) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center h-[calc(100dvh-5rem)] md:h-auto md:min-h-[calc(100vh-140px)] py-2 md:py-6 space-y-3 md:space-y-6 overflow-hidden md:overflow-visible">
+    <div className="flex flex-col justify-between md:justify-center items-center h-[calc(100dvh-8.5rem)] md:h-auto md:min-h-[calc(100vh-140px)] py-1 md:py-6 space-y-2 md:space-y-6 overflow-hidden md:overflow-visible">
       {/* Session Top Bar: Folder Switcher & Queue Count */}
       <div className="flex flex-wrap items-center justify-between w-full max-w-[540px] px-2 gap-3 shrink-0">
         {/* Folder Switcher */}
@@ -314,15 +314,15 @@ export function Study({ folderId }: StudyProps = {}) {
       </div>
 
       {/* The Flashcard */}
-      <div className="w-full max-w-[540px] [perspective:1000px] flex-1 md:flex-initial flex flex-col justify-center min-h-0">
+      <div className="flex-1 md:flex-initial w-full max-w-[540px] [perspective:1000px] flex flex-col justify-center min-h-0">
         <div
-          className={`relative w-full [transform-style:preserve-3d] flex-1 md:flex-initial h-full min-h-[380px] md:min-h-[420px] ${
+          className={`relative w-full [transform-style:preserve-3d] flex-1 md:flex-initial h-full max-h-[460px] md:max-h-none min-h-[300px] md:min-h-[420px] ${
             isTransitioning ? '' : 'transition-transform duration-500'
           } ${isRevealed ? '[transform:rotateY(180deg)]' : ''}`}
         >
           {/* FRONT FACE */}
           <div
-            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card rounded-2xl shadow-md border border-border px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center justify-between text-center cursor-pointer select-none"
+            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card rounded-2xl shadow-md border border-border px-4 py-4 sm:px-10 sm:py-8 flex flex-col items-center justify-between text-center cursor-pointer select-none"
             style={{ pointerEvents: isRevealed ? 'none' : 'auto' }}
             onClick={() => setIsRevealed(true)}
           >
@@ -338,8 +338,8 @@ export function Study({ folderId }: StudyProps = {}) {
             </div>
 
             {/* English Word */}
-            <div className="flex-1 flex flex-col justify-center items-center w-full py-6">
-              <h2 className="text-4xl sm:text-5xl font-bold tracking-tight text-foreground break-words w-full">
+            <div className="flex-1 flex flex-col justify-center items-center w-full py-3 sm:py-6">
+              <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground break-words w-full">
                 {currentWord.word}
               </h2>
               {currentWord.part_of_speech && (
@@ -370,32 +370,32 @@ export function Study({ folderId }: StudyProps = {}) {
 
           {/* BACK FACE */}
           <div
-            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-2xl shadow-md border border-border px-6 py-5 sm:px-10 sm:py-7 flex flex-col items-center text-center overflow-hidden"
+            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-2xl shadow-md border border-border px-4 py-3 sm:px-10 sm:py-7 flex flex-col items-center text-center overflow-hidden"
             style={{ pointerEvents: isRevealed ? 'auto' : 'none' }}
           >
             {/* Word Header */}
-            <div className="w-full flex items-center justify-between border-b border-border pb-3 mb-3 sm:mb-4 text-xs text-muted-foreground shrink-0">
+            <div className="w-full flex items-center justify-between border-b border-border pb-2 sm:pb-3 mb-2 sm:mb-4 text-xs text-muted-foreground shrink-0">
               <span className="font-semibold text-foreground text-sm">{currentWord.word}</span>
               <Badge variant={currentWord.level}>{currentWord.level}</Badge>
             </div>
 
             {/* Scrollable details */}
-            <div className="flex-1 w-full min-h-0 overflow-y-auto my-auto pr-1 space-y-4 text-center overscroll-contain">
+            <div className="flex-1 w-full min-h-0 overflow-y-auto my-auto pr-1 space-y-2.5 sm:space-y-4 text-center overscroll-contain">
               <div className="space-y-1">
-                <p className="text-2xl font-bold text-foreground break-words">
+                <p className="text-xl sm:text-2xl font-bold text-foreground break-words">
                   {currentWord.meaning}
                 </p>
               </div>
 
               {(currentWord.example_sentence || currentWord.example_translation) && (
-                <div className="p-3.5 rounded-xl bg-secondary/50 border border-border/60 text-left space-y-1.5">
+                <div className="p-2.5 sm:p-3.5 rounded-xl bg-secondary/50 border border-border/60 text-left space-y-1 sm:space-y-1.5">
                   {currentWord.example_sentence && (
-                    <p className="text-sm text-foreground font-medium italic">
+                    <p className="text-xs sm:text-sm text-foreground font-medium italic">
                       "{currentWord.example_sentence}"
                     </p>
                   )}
                   {currentWord.example_translation && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-2xs sm:text-xs text-muted-foreground">
                       {currentWord.example_translation}
                     </p>
                   )}
@@ -403,7 +403,7 @@ export function Study({ folderId }: StudyProps = {}) {
               )}
 
               {currentWord.notes && (
-                <div className="p-2.5 rounded-lg bg-muted/40 text-left">
+                <div className="p-2 sm:p-2.5 rounded-lg bg-muted/40 text-left">
                   <p className="text-xs text-muted-foreground">
                     <strong className="text-foreground">Note:</strong> {currentWord.notes}
                   </p>
@@ -412,11 +412,11 @@ export function Study({ folderId }: StudyProps = {}) {
             </div>
 
             {/* SRS Rating Buttons with Keyboard Shortcuts */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full mt-auto pt-3 sm:pt-4 border-t border-border flex-shrink-0">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 w-full mt-auto pt-2.5 sm:pt-4 border-t border-border shrink-0">
               <button
                 type="button"
                 onClick={() => handleRating('again')}
-                className="flex flex-col items-center justify-center min-h-[48px] py-2 px-2 rounded-lg font-medium text-xs transition-all bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 hover:bg-rose-500/20 active:scale-95 cursor-pointer touch-manipulation"
+                className="flex flex-col items-center justify-center min-h-[42px] sm:min-h-[48px] py-1.5 sm:py-2 px-2 rounded-lg font-medium text-xs transition-all bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 hover:bg-rose-500/20 active:scale-95 cursor-pointer touch-manipulation"
               >
                 <span className="font-bold text-sm">Again</span>
                 <span className="text-2xs opacity-70 mt-0.5 sm:inline">[1]</span>
@@ -425,7 +425,7 @@ export function Study({ folderId }: StudyProps = {}) {
               <button
                 type="button"
                 onClick={() => handleRating('hard')}
-                className="flex flex-col items-center justify-center min-h-[48px] py-2 px-2 rounded-lg font-medium text-xs transition-all bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 cursor-pointer touch-manipulation"
+                className="flex flex-col items-center justify-center min-h-[42px] sm:min-h-[48px] py-1.5 sm:py-2 px-2 rounded-lg font-medium text-xs transition-all bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 cursor-pointer touch-manipulation"
               >
                 <span className="font-bold text-sm">Hard</span>
                 <span className="text-2xs opacity-70 mt-0.5 sm:inline">[2]</span>
@@ -434,7 +434,7 @@ export function Study({ folderId }: StudyProps = {}) {
               <button
                 type="button"
                 onClick={() => handleRating('good')}
-                className="flex flex-col items-center justify-center min-h-[48px] py-2 px-2 rounded-lg font-medium text-xs transition-all bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/20 hover:bg-emerald-600/20 active:scale-95 cursor-pointer touch-manipulation"
+                className="flex flex-col items-center justify-center min-h-[42px] sm:min-h-[48px] py-1.5 sm:py-2 px-2 rounded-lg font-medium text-xs transition-all bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/20 hover:bg-emerald-600/20 active:scale-95 cursor-pointer touch-manipulation"
               >
                 <span className="font-bold text-sm">Good</span>
                 <span className="text-2xs opacity-70 mt-0.5 sm:inline">[3]</span>
@@ -443,7 +443,7 @@ export function Study({ folderId }: StudyProps = {}) {
               <button
                 type="button"
                 onClick={() => handleRating('easy')}
-                className="flex flex-col items-center justify-center min-h-[48px] py-2 px-2 rounded-lg font-medium text-xs transition-all bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 hover:bg-sky-500/20 active:scale-95 cursor-pointer touch-manipulation"
+                className="flex flex-col items-center justify-center min-h-[42px] sm:min-h-[48px] py-1.5 sm:py-2 px-2 rounded-lg font-medium text-xs transition-all bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 hover:bg-sky-500/20 active:scale-95 cursor-pointer touch-manipulation"
               >
                 <span className="font-bold text-sm">Easy</span>
                 <span className="text-2xs opacity-70 mt-0.5 sm:inline">[4]</span>

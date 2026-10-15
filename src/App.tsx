@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, NavLink, Link } from 'react-router-dom';
+import { Routes, Route, Navigate, NavLink, Link, useLocation } from 'react-router-dom';
 import {
   Home as HomeIcon,
   BookOpen,
@@ -19,6 +19,9 @@ import { ToastProvider } from './context/ToastContext';
 import { cn } from './lib/utils';
 
 function App() {
+  const location = useLocation();
+  const isStudy = location.pathname.startsWith('/study');
+
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
       'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150',
@@ -86,7 +89,12 @@ function App() {
         </header>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-6">
+        <main
+          className={cn(
+            'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 md:py-6 pb-20 md:pb-6',
+            isStudy && 'pb-0'
+          )}
+        >
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Home />} />
