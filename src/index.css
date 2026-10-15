@@ -121,6 +121,14 @@ select option {
   box-sizing: border-box;
 }
 
+html,
+body {
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background-color: rgb(var(--background));
@@ -131,7 +139,12 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+input,
+textarea {
+  user-select: text;
 }
 
 @media (prefers-reduced-motion: reduce) {

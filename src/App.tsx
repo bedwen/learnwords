@@ -27,6 +27,14 @@ function App() {
         : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
     );
 
+  const mobileNavLinkClass = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      'flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-lg text-xs font-medium transition-all duration-150',
+      isActive
+        ? 'text-foreground font-semibold bg-secondary/80'
+        : 'text-muted-foreground hover:text-foreground'
+    );
+
   return (
     <ToastProvider>
       <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
@@ -41,7 +49,8 @@ function App() {
                 </Link>
               </div>
 
-              <nav className="flex items-center gap-1 sm:gap-2">
+              {/* Desktop Navigation */}
+              <nav className="hidden md:flex items-center gap-1 sm:gap-2">
                 <NavLink to="/" end className={navLinkClass}>
                   <HomeIcon className="h-4 w-4" />
                   <span className="hidden sm:inline">Home</span>
@@ -67,12 +76,17 @@ function App() {
                   <ThemeToggle />
                 </div>
               </nav>
+
+              {/* Mobile Header Right: Theme Toggle Only */}
+              <div className="flex items-center md:hidden">
+                <ThemeToggle />
+              </div>
             </div>
           </div>
         </header>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 md:pb-6">
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Home />} />
@@ -86,6 +100,33 @@ function App() {
             </Routes>
           </ErrorBoundary>
         </main>
+
+        {/* Mobile Fixed Bottom Navigation Bar */}
+        <nav
+          aria-label="Mobile Navigation"
+          className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border flex items-center justify-around py-2 px-1 pb-[calc(0.5rem+env(safe-area-inset-bottom,0px))] md:hidden"
+        >
+          <NavLink to="/" end className={mobileNavLinkClass}>
+            <HomeIcon className="h-5 w-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Home</span>
+          </NavLink>
+          <NavLink to="/words" className={mobileNavLinkClass}>
+            <BookOpen className="h-5 w-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Words</span>
+          </NavLink>
+          <NavLink to="/study" className={mobileNavLinkClass}>
+            <GraduationCap className="h-5 w-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Study</span>
+          </NavLink>
+          <NavLink to="/statistics" className={mobileNavLinkClass}>
+            <BarChart3 className="h-5 w-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Statistics</span>
+          </NavLink>
+          <NavLink to="/data" className={mobileNavLinkClass}>
+            <Database className="h-5 w-5 mb-0.5" />
+            <span className="text-[11px] leading-tight">Data</span>
+          </NavLink>
+        </nav>
       </div>
     </ToastProvider>
   );

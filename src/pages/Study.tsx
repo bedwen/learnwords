@@ -249,9 +249,9 @@ export function Study({ folderId }: StudyProps = {}) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-140px)] py-6 space-y-6">
+    <div className="flex flex-col items-center justify-center h-[calc(100dvh-5rem)] md:h-auto md:min-h-[calc(100vh-140px)] py-2 md:py-6 space-y-3 md:space-y-6 overflow-hidden md:overflow-visible">
       {/* Session Top Bar: Folder Switcher & Queue Count */}
-      <div className="flex flex-wrap items-center justify-between w-full max-w-[540px] px-2 gap-3">
+      <div className="flex flex-wrap items-center justify-between w-full max-w-[540px] px-2 gap-3 shrink-0">
         {/* Folder Switcher */}
         <div className="relative" ref={switcherRef}>
           <button
@@ -314,17 +314,17 @@ export function Study({ folderId }: StudyProps = {}) {
       </div>
 
       {/* The Flashcard */}
-      <div className="w-full max-w-[540px] [perspective:1000px]">
+      <div className="w-full max-w-[540px] [perspective:1000px] flex-1 md:flex-initial flex flex-col justify-center min-h-0">
         <div
-          className={`relative w-full [transform-style:preserve-3d] ${
+          className={`relative w-full [transform-style:preserve-3d] flex-1 md:flex-initial h-full min-h-[380px] md:min-h-[420px] ${
             isTransitioning ? '' : 'transition-transform duration-500'
           } ${isRevealed ? '[transform:rotateY(180deg)]' : ''}`}
-          style={{ minHeight: '420px' }}
         >
           {/* FRONT FACE */}
           <div
-            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card rounded-2xl shadow-md border border-border px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center justify-between text-center"
+            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card rounded-2xl shadow-md border border-border px-6 py-6 sm:px-10 sm:py-8 flex flex-col items-center justify-between text-center cursor-pointer select-none"
             style={{ pointerEvents: isRevealed ? 'none' : 'auto' }}
+            onClick={() => setIsRevealed(true)}
           >
             {/* Header info */}
             <div className="w-full flex items-center justify-between text-xs text-muted-foreground">
@@ -354,7 +354,10 @@ export function Study({ folderId }: StudyProps = {}) {
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => setIsRevealed(true)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsRevealed(true);
+                }}
                 className="w-full sm:w-auto px-8 py-2.5 font-semibold shadow-xs"
               >
                 SHOW ANSWER
@@ -367,11 +370,11 @@ export function Study({ folderId }: StudyProps = {}) {
 
           {/* BACK FACE */}
           <div
-            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-2xl shadow-md border border-border px-6 py-6 sm:px-10 sm:py-7 flex flex-col items-center text-center"
+            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-2xl shadow-md border border-border px-6 py-5 sm:px-10 sm:py-7 flex flex-col items-center text-center overflow-hidden"
             style={{ pointerEvents: isRevealed ? 'auto' : 'none' }}
           >
             {/* Word Header */}
-            <div className="w-full flex items-center justify-between border-b border-border pb-3 mb-4 text-xs text-muted-foreground">
+            <div className="w-full flex items-center justify-between border-b border-border pb-3 mb-3 sm:mb-4 text-xs text-muted-foreground shrink-0">
               <span className="font-semibold text-foreground text-sm">{currentWord.word}</span>
               <Badge variant={currentWord.level}>{currentWord.level}</Badge>
             </div>
@@ -409,41 +412,41 @@ export function Study({ folderId }: StudyProps = {}) {
             </div>
 
             {/* SRS Rating Buttons with Keyboard Shortcuts */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full mt-auto pt-4 border-t border-border flex-shrink-0">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full mt-auto pt-3 sm:pt-4 border-t border-border flex-shrink-0">
               <button
                 type="button"
                 onClick={() => handleRating('again')}
-                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-lg font-medium text-xs transition-all bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 hover:bg-rose-500/20 active:scale-95 cursor-pointer"
+                className="flex flex-col items-center justify-center min-h-[48px] py-2 px-2 rounded-lg font-medium text-xs transition-all bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 hover:bg-rose-500/20 active:scale-95 cursor-pointer touch-manipulation"
               >
                 <span className="font-bold text-sm">Again</span>
-                <span className="text-2xs opacity-70 mt-0.5">[1]</span>
+                <span className="text-2xs opacity-70 mt-0.5 sm:inline">[1]</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleRating('hard')}
-                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-lg font-medium text-xs transition-all bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 cursor-pointer"
+                className="flex flex-col items-center justify-center min-h-[48px] py-2 px-2 rounded-lg font-medium text-xs transition-all bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 cursor-pointer touch-manipulation"
               >
                 <span className="font-bold text-sm">Hard</span>
-                <span className="text-2xs opacity-70 mt-0.5">[2]</span>
+                <span className="text-2xs opacity-70 mt-0.5 sm:inline">[2]</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleRating('good')}
-                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-lg font-medium text-xs transition-all bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/20 hover:bg-emerald-600/20 active:scale-95 cursor-pointer"
+                className="flex flex-col items-center justify-center min-h-[48px] py-2 px-2 rounded-lg font-medium text-xs transition-all bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/20 hover:bg-emerald-600/20 active:scale-95 cursor-pointer touch-manipulation"
               >
                 <span className="font-bold text-sm">Good</span>
-                <span className="text-2xs opacity-70 mt-0.5">[3]</span>
+                <span className="text-2xs opacity-70 mt-0.5 sm:inline">[3]</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleRating('easy')}
-                className="flex flex-col items-center justify-center py-2.5 px-2 rounded-lg font-medium text-xs transition-all bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 hover:bg-sky-500/20 active:scale-95 cursor-pointer"
+                className="flex flex-col items-center justify-center min-h-[48px] py-2 px-2 rounded-lg font-medium text-xs transition-all bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 hover:bg-sky-500/20 active:scale-95 cursor-pointer touch-manipulation"
               >
                 <span className="font-bold text-sm">Easy</span>
-                <span className="text-2xs opacity-70 mt-0.5">[4]</span>
+                <span className="text-2xs opacity-70 mt-0.5 sm:inline">[4]</span>
               </button>
             </div>
           </div>
