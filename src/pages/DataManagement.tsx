@@ -24,7 +24,10 @@ import {
 } from '../api/data';
 import { getFolders } from '../api/folders';
 import { Folder } from '../types';
+import { isMobileApp } from '../platform';
+import { getLastSuccessfulSyncTime, LAST_SUCCESSFUL_SYNC_KEY } from '../sync/autoSync';
 import { Button } from '../components/ui/Button';
+
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
@@ -56,6 +59,7 @@ export function DataManagement() {
     return 'http://localhost:3001';
   });
   const [isLanSyncing, setIsLanSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => getLastSuccessfulSyncTime());
 
   const handlePeerUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -76,6 +80,12 @@ export function DataManagement() {
         setSuccess(msg);
         toast.success(msg);
 
+        const nowIso = new Date().toISOString();
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(LAST_SUCCESSFUL_SYNC_KEY, nowIso);
+        }
+        setLastSyncTime(nowIso);
+
         // Refresh folders
         getFolders()
           .then((folderRes) => {
@@ -92,6 +102,7 @@ export function DataManagement() {
       setIsLanSyncing(false);
     }
   };
+
 
   // JSON Backup Restore state
   const [importFileData, setImportFileData] = useState<ExportData | null>(null);
@@ -488,15 +499,29 @@ export function DataManagement() {
                   />
                 </div>
 
+                <div className="flex items-center justify-between text-xs text-muted-foreground px-0.5">
+                  <span>Last successful sync:</span>
+                  <span className="font-medium text-foreground">
+                    {lastSyncTime ? new Date(lastSyncTime).toLocaleString() : 'Never'}
+                  </span>
+                </div>
+
                 <Button
                   onClick={handleLanSync}
                   disabled={isLanSyncing || isProcessing}
                   className="w-full gap-2"
                 >
                   <Wifi className="h-4 w-4" />
-                  <span>{isLanSyncing ? 'Syncing with Peer...' : 'Sync with Peer'}</span>
+                  <span>
+                    {isLanSyncing
+                      ? 'Syncing with Peer...'
+                      : isMobileApp()
+                      ? 'Sync Now'
+                      : 'Sync with Peer'}
+                  </span>
                 </Button>
               </div>
+
             </CardContent>
           </Card>
         </TabsContent>

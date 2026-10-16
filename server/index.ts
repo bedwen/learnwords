@@ -1,18 +1,45 @@
+import os from 'os';
 import { getDatabase, initializeSchema, closeDatabase } from './db';
 import { createApp } from './app';
 
 const app = createApp();
 const PORT = 3001;
-// Allow LAN binding when launched with HOST=0.0.0.0 or custom IP without hardcoding 0.0.0.0
-const HOST = process.env.HOST || '127.0.0.1';
+
+const isLan = process.argv.includes('--lan');
+const HOST = isLan ? '0.0.0.0' : (process.env.HOST || '127.0.0.1');
+
+function getLanIpAddress(): string | null {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    const netList = interfaces[name];
+    if (!netList) continue;
+    for (const net of netList) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return null;
+}
 
 // Initialize database and start server
 const db = getDatabase();
 initializeSchema(db);
 
 const server = app.listen(PORT, HOST, () => {
-  console.log(`LearnWords API running on http://${HOST}:${PORT}`);
+  if (isLan) {
+    const lanIp = getLanIpAddress();
+    console.log(`LearnWords API running in LAN mode on http://${HOST}:${PORT}`);
+    if (lanIp) {
+      console.log(`Mobile Peer URL: http://${lanIp}:${PORT}`);
+    } else {
+      console.log(`Mobile Peer URL: http://<LAN-IP>:${PORT}`);
+    }
+  } else {
+    console.log(`LearnWords API running on http://${HOST}:${PORT}`);
+  }
 });
+
 
 // Graceful shutdown
 process.on('SIGINT', () => {

@@ -1,9 +1,24 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: './',
-  plugins: [react()],
+  plugins: [
+    react(),
+    ...(mode === 'mobile'
+      ? [
+          {
+            name: 'strip-google-fonts',
+            transformIndexHtml(html: string) {
+              return html.replace(
+                /<link[^>]+href="https:\/\/fonts\.(googleapis|gstatic)\.com[^>]*>\s*/gi,
+                ''
+              );
+            },
+          },
+        ]
+      : []),
+  ],
   server: {
     host: process.env.HOST || '127.0.0.1',
     port: 5173,
@@ -24,4 +39,5 @@ export default defineConfig({
       },
     },
   },
-});
+}));
+

@@ -16,18 +16,41 @@ import { Statistics } from './pages/Statistics';
 import { DataManagement } from './pages/DataManagement';
 import { ThemeToggle } from './components/ui/ThemeToggle';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
-import { ToastProvider } from './context/ToastContext';
+import { ToastProvider, useToast } from './context/ToastContext';
 import { isLocalDatabaseInitialized, hydrateLocalDatabase } from './storage/syncHydrator';
 import { checkAndMigrateDesktopData } from './storage/desktopMigration';
 import { isMobileApp } from './platform';
+import { autoSync } from './sync/autoSync';
 import { cn } from './lib/utils';
 
-function App() {
+function AppContent() {
   const location = useLocation();
   const isStudy = location.pathname.startsWith('/study');
+  const toast = useToast();
 
   useEffect(() => {
     if (isMobileApp()) {
+      const triggerAutoSync = async () => {
+        try {
+          const res = await autoSync();
+          if (res.ran && res.result) {
+            const hasChanges =
+              (res.result.wordsAdded || 0) +
+              (res.result.wordsUpdated || 0) +
+              (res.result.wordsDeleted || 0) +
+              (res.result.foldersAdded || 0) +
+              (res.result.foldersUpdated || 0) +
+              (res.result.foldersDeleted || 0) +
+              (res.result.reviewsMerged || 0) > 0;
+            if (hasChanges && res.summary) {
+              toast.info(`Synced: ${res.summary}`);
+            }
+          }
+        } catch {
+          // Fails silently
+        }
+      };
+
       async function initLocalStorage() {
         try {
           const initialized = await isLocalDatabaseInitialized();
@@ -37,15 +60,30 @@ function App() {
         } catch {
           // Silently tolerate server offline; client continues standalone
         }
+        // Trigger auto-sync once storage is ready
+        triggerAutoSync();
       }
+
       initLocalStorage();
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          triggerAutoSync();
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     } else {
       // Desktop mode: one-time data rescue
       checkAndMigrateDesktopData().catch(() => {
         // Silently tolerate server offline; retry on next launch
       });
     }
-  }, []);
+  }, [toast]);
+
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
@@ -64,8 +102,7 @@ function App() {
     );
 
   return (
-    <ToastProvider>
-      <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-200">
         {/* Navigation */}
         <header className="bg-card/85 backdrop-blur-md border-b border-border sticky top-0 z-40 transition-colors duration-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -161,8 +198,16 @@ function App() {
           </NavLink>
         </nav>
       </div>
+  );
+}
+
+export function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
     </ToastProvider>
   );
 }
 
 export default App;
+
