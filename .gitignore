@@ -5,6 +5,7 @@ data/
 *.sqlite
 .env
 .env.*
+!.env.mobile
 .DS_Store
 *.tsbuildinfo
 *.log

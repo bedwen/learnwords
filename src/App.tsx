@@ -18,6 +18,8 @@ import { ThemeToggle } from './components/ui/ThemeToggle';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
 import { ToastProvider } from './context/ToastContext';
 import { isLocalDatabaseInitialized, hydrateLocalDatabase } from './storage/syncHydrator';
+import { checkAndMigrateDesktopData } from './storage/desktopMigration';
+import { isMobileApp } from './platform';
 import { cn } from './lib/utils';
 
 function App() {
@@ -25,17 +27,24 @@ function App() {
   const isStudy = location.pathname.startsWith('/study');
 
   useEffect(() => {
-    async function initLocalStorage() {
-      try {
-        const initialized = await isLocalDatabaseInitialized();
-        if (!initialized) {
-          await hydrateLocalDatabase();
+    if (isMobileApp()) {
+      async function initLocalStorage() {
+        try {
+          const initialized = await isLocalDatabaseInitialized();
+          if (!initialized) {
+            await hydrateLocalDatabase();
+          }
+        } catch {
+          // Silently tolerate server offline; client continues standalone
         }
-      } catch {
-        // Silently tolerate server offline; client continues standalone
       }
+      initLocalStorage();
+    } else {
+      // Desktop mode: one-time data rescue
+      checkAndMigrateDesktopData().catch(() => {
+        // Silently tolerate server offline; retry on next launch
+      });
     }
-    initLocalStorage();
   }, []);
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
