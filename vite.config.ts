@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => ({
   base: './',
+  build: {
+    target: 'es2020',
+  },
   plugins: [
     react(),
     ...(mode === 'mobile'
