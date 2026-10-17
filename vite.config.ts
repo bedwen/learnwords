@@ -6,6 +6,11 @@ export default defineConfig(({ mode }) => ({
   build: {
     target: 'es2020',
   },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'es2020',
+    },
+  },
   plugins: [
     react(),
     ...(mode === 'mobile'
