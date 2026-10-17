@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import crypto from 'crypto';
 import { getDatabase } from '../db';
-import { WordWithState, ReviewRating } from '../../src/types';
+import { WordWithState, ReviewRating, StudyMode } from '../../src/types';
 import { LearningEngine } from './learningEngine';
 import { WordService } from './words'; // Reusing for fetching WordWithState
 import { FolderService } from './folders';
@@ -13,9 +13,9 @@ export class StudyService {
    * 1. Due reviews (next_review <= now)
    * 2. New words (mastery = 0)
    * 
-   * Optionally filtered by folder ID. Soft-deleted words are excluded.
+   * Optionally filtered by folder ID and study mode. Soft-deleted words are excluded.
    */
-  static getStudyQueue(limit = 50, folderId?: string): WordWithState[] {
+  static getStudyQueue(limit = 50, folderId?: string, mode: StudyMode = 'words'): WordWithState[] {
     const db = getDatabase();
     const now = new Date().toISOString();
 
@@ -50,6 +50,10 @@ export class StudyService {
     } else {
       query += ` WHERE w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
       params.push(now);
+    }
+
+    if (mode === 'sentences') {
+      query += ` AND w.example_sentence IS NOT NULL AND length(trim(w.example_sentence)) > 0 AND w.example_translation IS NOT NULL AND length(trim(w.example_translation)) > 0`;
     }
 
     query += `

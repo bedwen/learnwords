@@ -46,6 +46,15 @@ On the Study page, interactive flashcards display the target word on the front a
 Powered by a Spaced Repetition System (SRS), the app automatically schedules reviews based on your ratings (Again, Hard, Good, Easy) to build long-term retention. You can also filter your study session by specific folders and use keyboard shortcuts for effortless practice.
 ![Study Page](imagesforreadme/study_split.png)
 
+### **Sentence Translation Practice**
+
+In addition to traditional word flashcards, LearnWords features context-based sentence translation practice:
+
+- **Bidirectional Practice:** Toggle freely between `Sentence → Translation` and `Translation → Sentence` modes.
+- **Active Recall & Typing:** Type your translation in an auto-focused input box to test active retrieval before checking answers.
+- **Side-by-Side Comparison:** Compare your typed answer with the canonical reference sentence and target word details.
+- **Spaced Repetition Integration:** Grade your recall with standard SRS buttons (`Again`, `Hard`, `Good`, `Easy`) or keyboard shortcuts `1-4`, keeping spaced repetition progress unified across both study modes.
+
 ---
 ## **Statistics**
 

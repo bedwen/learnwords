@@ -2,6 +2,8 @@
 
 export type CEFRLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 export type ReviewRating = 'again' | 'hard' | 'good' | 'easy';
+export type StudyMode = 'words' | 'sentences';
+export type SentencePracticeDirection = 'sentence_to_translation' | 'translation_to_sentence';
 
 export interface Word {
   id: string;

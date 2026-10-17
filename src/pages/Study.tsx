@@ -8,14 +8,16 @@ import {
   BookOpen,
   Keyboard,
   ChevronDown,
+  Languages,
 } from 'lucide-react';
-import { WordWithState, ReviewRating, Folder, FolderListResponse } from '../types';
+import { WordWithState, ReviewRating, Folder, FolderListResponse, StudyMode } from '../types';
 import { getStudyQueue, submitReview } from '../api/study';
 import { getFolders } from '../api/folders';
 import { getCached, setCached } from '../api/cache';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { SentencePracticeView } from '../components/study/SentencePracticeView';
 
 interface StudyProps {
   folderId?: string;
@@ -70,10 +72,27 @@ export function Study({ folderId }: StudyProps = {}) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Study mode: 'words' (default) or 'sentences'
+  const currentMode: StudyMode = searchParams.get('mode') === 'sentences' ? 'sentences' : 'words';
+
+  const toggleMode = () => {
+    const nextMode = currentMode === 'words' ? 'sentences' : 'words';
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (nextMode === 'sentences') {
+        next.set('mode', 'sentences');
+      } else {
+        next.delete('mode');
+      }
+      return next;
+    });
+    setIsRevealed(false);
+  };
+
   const fetchQueue = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getStudyQueue(activeFolderId);
+      const data = await getStudyQueue(activeFolderId, currentMode);
       setQueue(data);
       setError(null);
     } catch (err) {
@@ -81,7 +100,7 @@ export function Study({ folderId }: StudyProps = {}) {
     } finally {
       setLoading(false);
     }
-  }, [activeFolderId]);
+  }, [activeFolderId, currentMode]);
 
   useEffect(() => {
     fetchQueue();
@@ -116,6 +135,8 @@ export function Study({ folderId }: StudyProps = {}) {
   );
 
   useEffect(() => {
+    if (currentMode !== 'words') return;
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
 
@@ -147,7 +168,7 @@ export function Study({ folderId }: StudyProps = {}) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isRevealed, queue.length, loading, submitting, handleRating]);
+  }, [currentMode, isRevealed, queue.length, loading, submitting, handleRating]);
 
   const getWordFolderLabels = (word: WordWithState): string => {
     if (!word.folderIds || word.folderIds.length === 0) {
@@ -166,7 +187,15 @@ export function Study({ folderId }: StudyProps = {}) {
 
   const handleFolderSwitch = (fId: string | undefined) => {
     setActiveFolderId(fId);
-    setSearchParams(fId ? { folderId: fId } : {});
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (fId) {
+        next.set('folderId', fId);
+      } else {
+        next.delete('folderId');
+      }
+      return next;
+    });
     setFolderSwitcherOpen(false);
     setIsRevealed(false);
   };
@@ -192,6 +221,56 @@ export function Study({ folderId }: StudyProps = {}) {
   }
 
   if (queue.length === 0) {
+    if (currentMode === 'sentences') {
+      return (
+        <div className="py-20 flex flex-col items-center justify-center text-center max-w-lg mx-auto">
+          <Card className="w-full border-border p-8 space-y-6">
+            <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-xs">
+              <CheckCircle2 className="h-8 w-8" />
+            </div>
+
+            <div className="space-y-2">
+              <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                Sentence Practice Complete!
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {activeFolderId
+                  ? `No more sentence practice items due in "${getActiveFolderName()}" right now.`
+                  : "Great job! All scheduled sentences with examples are reviewed."}
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+              <Button
+                variant="primary"
+                className="w-full sm:w-auto gap-2"
+                onClick={toggleMode}
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Switch to Word Flashcards</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto gap-2"
+                onClick={fetchQueue}
+              >
+                <RotateCw className="h-4 w-4" />
+                <span>Check Again</span>
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full sm:w-auto gap-2 text-muted-foreground"
+                onClick={() => navigate('/')}
+              >
+                <span>Home</span>
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center max-w-lg mx-auto">
         <Card className="w-full border-border p-8 space-y-6">
@@ -250,71 +329,104 @@ export function Study({ folderId }: StudyProps = {}) {
 
   return (
     <div className="flex flex-col justify-between md:justify-center items-center h-[calc(100dvh-8.5rem)] md:h-auto md:min-h-[calc(100vh-140px)] py-1 md:py-6 space-y-2 md:space-y-6 overflow-hidden md:overflow-visible">
-      {/* Session Top Bar: Folder Switcher & Queue Count */}
-      <div className="flex flex-wrap items-center justify-between w-full max-w-[540px] px-2 gap-3 shrink-0">
-        {/* Folder Switcher */}
-        <div className="relative" ref={switcherRef}>
-          <button
-            type="button"
-            onClick={() => setFolderSwitcherOpen(!folderSwitcherOpen)}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-secondary transition-colors text-foreground shadow-2xs"
-          >
-            <FolderIcon className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>Folder: <strong>{getActiveFolderName()}</strong></span>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
+      {/* Session Top Bar: Folder Switcher & Mode Toggle & Queue Count */}
+      <div className={`flex flex-wrap items-center justify-between w-full ${currentMode === 'sentences' ? 'max-w-[620px]' : 'max-w-[540px]'} px-2 gap-3 shrink-0`}>
+        <div className="flex items-center gap-2">
+          {/* Folder Switcher */}
+          <div className="relative" ref={switcherRef}>
+            <button
+              type="button"
+              onClick={() => setFolderSwitcherOpen(!folderSwitcherOpen)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-secondary transition-colors text-foreground shadow-2xs"
+            >
+              <FolderIcon className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Folder: <strong>{getActiveFolderName()}</strong></span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+            </button>
 
-          {folderSwitcherOpen && (
-            <div className="absolute top-full mt-1.5 left-0 bg-card rounded-xl shadow-lg border border-border py-1.5 min-w-[200px] z-50 animate-in fade-in-0 zoom-in-95 duration-150">
-              <button
-                type="button"
-                onClick={() => handleFolderSwitch(undefined)}
-                className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors ${
-                  !activeFolderId ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
-                }`}
-              >
-                All Words
-              </button>
-              {folders.map((f) => (
+            {folderSwitcherOpen && (
+              <div className="absolute top-full mt-1.5 left-0 bg-card rounded-xl shadow-lg border border-border py-1.5 min-w-[200px] z-50 animate-in fade-in-0 zoom-in-95 duration-150">
                 <button
-                  key={f.id}
                   type="button"
-                  onClick={() => handleFolderSwitch(f.id)}
-                  className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors flex items-center gap-2 ${
-                    activeFolderId === f.id ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
+                  onClick={() => handleFolderSwitch(undefined)}
+                  className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors ${
+                    !activeFolderId ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
                   }`}
                 >
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ backgroundColor: f.color }}
-                  />
-                  <span>{f.name}</span>
+                  All Words
                 </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => handleFolderSwitch('ungrouped')}
-                className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors flex items-center gap-2 ${
-                  activeFolderId === 'ungrouped' ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
-                }`}
-              >
-                <span className="w-2 h-2 rounded-full shrink-0 bg-muted-foreground" />
-                <span>Ungrouped</span>
-              </button>
-            </div>
-          )}
+                {folders.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => handleFolderSwitch(f.id)}
+                    className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors flex items-center gap-2 ${
+                      activeFolderId === f.id ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
+                    }`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: f.color }}
+                    />
+                    <span>{f.name}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => handleFolderSwitch('ungrouped')}
+                  className={`w-full text-left px-3.5 py-1.5 text-xs hover:bg-secondary transition-colors flex items-center gap-2 ${
+                    activeFolderId === 'ungrouped' ? 'text-foreground font-semibold bg-secondary/50' : 'text-muted-foreground'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0 bg-muted-foreground" />
+                  <span>Ungrouped</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Mode Switcher Button */}
+          <button
+            type="button"
+            onClick={toggleMode}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card hover:bg-secondary transition-colors text-foreground shadow-2xs cursor-pointer"
+            title={currentMode === 'words' ? 'Switch to Sentence Practice' : 'Switch to Word Flashcards'}
+          >
+            {currentMode === 'words' ? (
+              <>
+                <Languages className="h-3.5 w-3.5 text-primary" />
+                <span>Sentence Practice</span>
+              </>
+            ) : (
+              <>
+                <BookOpen className="h-3.5 w-3.5 text-primary" />
+                <span>Word Flashcards</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Queue badge */}
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="text-xs font-medium">
-            {queue.length} {queue.length === 1 ? 'word' : 'words'} in queue
+            {queue.length} {queue.length === 1 ? (currentMode === 'sentences' ? 'sentence' : 'word') : (currentMode === 'sentences' ? 'sentences' : 'words')} in queue
           </Badge>
         </div>
       </div>
 
-      {/* The Flashcard */}
-      <div className="flex-1 md:flex-initial w-full max-w-[540px] [perspective:1000px] flex flex-col justify-center min-h-0">
+      {currentMode === 'sentences' ? (
+        <div className="w-full flex justify-center">
+          <SentencePracticeView
+            queue={queue}
+            folders={folders}
+            onReview={handleRating}
+            onSwitchToFlashcards={toggleMode}
+            onRefreshQueue={fetchQueue}
+          />
+        </div>
+      ) : (
+        /* The Flashcard */
+        <div className="flex-1 md:flex-initial w-full max-w-[540px] [perspective:1000px] flex flex-col justify-center min-h-0">
         <div
           className={`relative w-full [transform-style:preserve-3d] flex-1 md:flex-initial h-full max-h-[460px] md:max-h-none min-h-[300px] md:min-h-[420px] ${
             isTransitioning ? '' : 'transition-transform duration-500'
@@ -452,6 +564,7 @@ export function Study({ folderId }: StudyProps = {}) {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { StudyService } from '../services/study';
-import { ReviewRating } from '../../src/types';
+import { ReviewRating, StudyMode } from '../../src/types';
 
 const router = Router();
 
@@ -8,7 +8,9 @@ const router = Router();
 router.get('/queue', (req, res) => {
   try {
     const folderId = req.query.folderId as string | undefined;
-    const queue = StudyService.getStudyQueue(20, folderId);
+    const mode: StudyMode = req.query.mode === 'sentences' ? 'sentences' : 'words';
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+    const queue = StudyService.getStudyQueue(isNaN(limit) ? 50 : limit, folderId, mode);
     res.json(queue);
   } catch (error) {
     console.error('Error fetching study queue:', error);

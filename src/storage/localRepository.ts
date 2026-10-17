@@ -15,6 +15,7 @@ import {
   CsvImportResult,
   SyncBundle,
   SyncMergeResult,
+  StudyMode,
 } from '../types';
 import Papa from 'papaparse';
 import { LearningEngine } from '../learning/learningEngine';
@@ -62,9 +63,35 @@ export class LocalRepository {
    * 1. Due reviews (next_review <= now)
    * 2. New words (mastery === 0)
    * Prioritizes due reviews over new words, ordered by next_review ASC.
-   * Supports optional folder filtering (including 'ungrouped').
+   * Supports optional folder filtering (including 'ungrouped') and sentence practice mode.
    */
-  async getStudyQueue(limit = 50, folderId?: string): Promise<WordWithState[]> {
+  async getStudyQueue(
+    limitOrFolderId: number | string = 50,
+    folderIdOrLimit?: string | number,
+    mode: StudyMode = 'words'
+  ): Promise<WordWithState[]> {
+    let limit = 50;
+    let folderId: string | undefined = undefined;
+    let actualMode: StudyMode = mode;
+
+    if (typeof limitOrFolderId === 'number') {
+      limit = limitOrFolderId;
+      if (typeof folderIdOrLimit === 'string') {
+        folderId = folderIdOrLimit;
+      }
+    } else if (typeof limitOrFolderId === 'string') {
+      folderId = limitOrFolderId;
+      if (typeof folderIdOrLimit === 'number') {
+        limit = folderIdOrLimit;
+      }
+    } else {
+      if (typeof folderIdOrLimit === 'number') {
+        limit = folderIdOrLimit;
+      } else if (typeof folderIdOrLimit === 'string') {
+        folderId = folderIdOrLimit;
+      }
+    }
+
     const nowIso = new Date().toISOString();
 
     const [allWords, allStates, allWordFolders] = await Promise.all([
@@ -90,7 +117,7 @@ export class LocalRepository {
     }
 
     // Join and filter candidates
-    const candidates: WordWithState[] = [];
+    let candidates: WordWithState[] = [];
 
     for (const word of activeWords) {
       const state = stateMap.get(word.id) || this.createDefaultState(word.id, word.created_at);
@@ -112,6 +139,15 @@ export class LocalRepository {
           folderIds,
         });
       }
+    }
+
+    if (actualMode === 'sentences') {
+      candidates = candidates.filter(
+        (w) =>
+          !w.deleted_at &&
+          (w.example_sentence?.trim() || '').length > 0 &&
+          (w.example_translation?.trim() || '').length > 0
+      );
     }
 
     // Sort: Due reviews (mastery > 0) first, then new words (mastery === 0)
@@ -1500,9 +1536,11 @@ export class LocalRepository {
 // Global default repository instance
 export const localRepository = new LocalRepository();
 
-// Standalone convenience exports
-export const getLocalStudyQueue = (limit?: number, folderId?: string) =>
-  localRepository.getStudyQueue(limit, folderId);
+export const getLocalStudyQueue = (
+  limitOrFolderId?: number | string,
+  folderIdOrLimit?: string | number,
+  mode: StudyMode = 'words'
+) => localRepository.getStudyQueue(limitOrFolderId, folderIdOrLimit, mode);
 export const processLocalReview = (wordId: string, rating: ReviewRating) =>
   localRepository.processReview(wordId, rating);
 export const getLocalWords = (params?: Parameters<LocalRepository['getWords']>[0]) =>
