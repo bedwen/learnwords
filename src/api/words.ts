@@ -1,4 +1,4 @@
-import { CEFRLevel, CreateWordDto, UpdateWordDto, WordWithState } from '../types';
+import { CEFRLevel, CreateWordDto, UpdateWordDto, WordWithState, TrashCountResponse } from '../types';
 import { localRepository } from '../storage/localRepository';
 import { clearCache } from './cache';
 import { isMobileApp } from '../platform';
@@ -180,5 +180,116 @@ export async function batchUpdateFolder(
   }
   clearCache('words');
   clearCache('folders');
+  return result;
+}
+
+export async function getTrashWords(params?: {
+  search?: string;
+  level?: string;
+}): Promise<WordWithState[]> {
+  if (isMobileApp()) {
+    return localRepository.getTrashWords(params);
+  }
+  const url = new URL(`${API_BASE}/trash`, getOrigin());
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) url.searchParams.append(key, value);
+    });
+  }
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error('Failed to fetch trash words');
+  return res.json();
+}
+
+export async function getTrashCount(): Promise<TrashCountResponse> {
+  if (isMobileApp()) {
+    const count = await localRepository.getTrashCount();
+    return { count };
+  }
+  const res = await fetch(`${API_BASE}/trash/count`);
+  if (!res.ok) throw new Error('Failed to fetch trash count');
+  return res.json();
+}
+
+export async function restoreWord(id: string): Promise<void> {
+  if (isMobileApp()) {
+    const success = await localRepository.restoreWord(id);
+    if (!success) throw new Error('Failed to restore word');
+  } else {
+    const res = await fetch(`${API_BASE}/${id}/restore`, { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to restore word');
+  }
+  clearCache('home');
+  clearCache('dashboard');
+  clearCache('words');
+  clearCache('folders');
+}
+
+export async function permanentDeleteWord(id: string): Promise<void> {
+  if (isMobileApp()) {
+    const success = await localRepository.permanentDeleteWord(id);
+    if (!success) throw new Error('Failed to permanently delete word');
+  } else {
+    const res = await fetch(`${API_BASE}/${id}/permanent`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to permanently delete word');
+  }
+  clearCache('home');
+  clearCache('dashboard');
+  clearCache('words');
+  clearCache('folders');
+}
+
+export async function batchRestoreWords(wordIds: string[]): Promise<{ success: boolean; count: number }> {
+  let result: { success: boolean; count: number };
+  if (isMobileApp()) {
+    const count = await localRepository.batchRestoreWords(wordIds);
+    result = { success: true, count };
+  } else {
+    result = await postBatch<{ success: boolean; count: number }>(
+      'restore',
+      { wordIds },
+      'Failed to restore words'
+    );
+  }
+  clearCache('words');
+  clearCache('folders');
+  clearCache('home');
+  clearCache('dashboard');
+  return result;
+}
+
+export async function batchPermanentDeleteWords(wordIds: string[]): Promise<{ success: boolean; count: number }> {
+  let result: { success: boolean; count: number };
+  if (isMobileApp()) {
+    const count = await localRepository.batchPermanentDeleteWords(wordIds);
+    result = { success: true, count };
+  } else {
+    result = await postBatch<{ success: boolean; count: number }>(
+      'permanent',
+      { wordIds },
+      'Failed to permanently delete words'
+    );
+  }
+  clearCache('words');
+  clearCache('folders');
+  clearCache('home');
+  clearCache('dashboard');
+  return result;
+}
+
+export async function emptyTrash(): Promise<{ success: boolean; count: number }> {
+  let result: { success: boolean; count: number };
+  if (isMobileApp()) {
+    const count = await localRepository.emptyTrash();
+    result = { success: true, count };
+  } else {
+    const res = await fetch(`${API_BASE}/trash/empty`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Failed to empty trash');
+    result = await res.json();
+  }
+  clearCache('words');
+  clearCache('folders');
+  clearCache('home');
+  clearCache('dashboard');
   return result;
 }

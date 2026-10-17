@@ -1,22 +1,28 @@
-import { Layers, FolderPlus, FolderMinus, Trash2, X } from 'lucide-react';
+import { Layers, FolderPlus, FolderMinus, Trash2, X, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 
 interface BatchActionBarProps {
   selectedCount: number;
-  canRemoveFromFolder: boolean;
+  canRemoveFromFolder?: boolean;
   disabled?: boolean;
-  onChangeLevel: () => void;
-  onAddToFolder: () => void;
-  onRemoveFromFolder: () => void;
-  onDelete: () => void;
+  isTrash?: boolean;
+  onRestore?: () => void;
+  onPermanentDelete?: () => void;
+  onChangeLevel?: () => void;
+  onAddToFolder?: () => void;
+  onRemoveFromFolder?: () => void;
+  onDelete?: () => void;
   onClear: () => void;
 }
 
 export function BatchActionBar({
   selectedCount,
-  canRemoveFromFolder,
+  canRemoveFromFolder = false,
   disabled = false,
+  isTrash = false,
+  onRestore,
+  onPermanentDelete,
   onChangeLevel,
   onAddToFolder,
   onRemoveFromFolder,
@@ -37,55 +43,91 @@ export function BatchActionBar({
       </Badge>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          id="batch-change-level"
-          variant="secondary"
-          size="sm"
-          onClick={onChangeLevel}
-          disabled={disabled}
-          className="gap-1.5"
-        >
-          <Layers className="h-3.5 w-3.5" />
-          <span>Change Level</span>
-        </Button>
+        {isTrash ? (
+          <>
+            <Button
+              id="batch-restore"
+              variant="secondary"
+              size="sm"
+              onClick={onRestore}
+              disabled={disabled}
+              className="gap-1.5"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Restore Selected ({selectedCount})</span>
+            </Button>
 
-        <Button
-          id="batch-add-to-folder"
-          variant="secondary"
-          size="sm"
-          onClick={onAddToFolder}
-          disabled={disabled}
-          className="gap-1.5"
-        >
-          <FolderPlus className="h-3.5 w-3.5" />
-          <span>Add to Folder</span>
-        </Button>
+            <Button
+              id="batch-permanent-delete"
+              variant="danger"
+              size="sm"
+              onClick={onPermanentDelete}
+              disabled={disabled}
+              className="gap-1.5"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete Forever ({selectedCount})</span>
+            </Button>
+          </>
+        ) : (
+          <>
+            {onChangeLevel && (
+              <Button
+                id="batch-change-level"
+                variant="secondary"
+                size="sm"
+                onClick={onChangeLevel}
+                disabled={disabled}
+                className="gap-1.5"
+              >
+                <Layers className="h-3.5 w-3.5" />
+                <span>Change Level</span>
+              </Button>
+            )}
 
-        {canRemoveFromFolder && (
-          <Button
-            id="batch-remove-from-folder"
-            variant="secondary"
-            size="sm"
-            onClick={onRemoveFromFolder}
-            disabled={disabled}
-            className="gap-1.5"
-          >
-            <FolderMinus className="h-3.5 w-3.5" />
-            <span>Remove from Folder</span>
-          </Button>
+            {onAddToFolder && (
+              <Button
+                id="batch-add-to-folder"
+                variant="secondary"
+                size="sm"
+                onClick={onAddToFolder}
+                disabled={disabled}
+                className="gap-1.5"
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+                <span>Add to Folder</span>
+              </Button>
+            )}
+
+            {canRemoveFromFolder && onRemoveFromFolder && (
+              <Button
+                id="batch-remove-from-folder"
+                variant="secondary"
+                size="sm"
+                onClick={onRemoveFromFolder}
+                disabled={disabled}
+                className="gap-1.5"
+              >
+                <FolderMinus className="h-3.5 w-3.5" />
+                <span>Remove from Folder</span>
+              </Button>
+            )}
+
+            {onDelete && (
+              <Button
+                id="batch-delete"
+                variant="danger"
+                size="sm"
+                onClick={onDelete}
+                disabled={disabled}
+                className="gap-1.5"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete</span>
+              </Button>
+            )}
+          </>
         )}
-
-        <Button
-          id="batch-delete"
-          variant="danger"
-          size="sm"
-          onClick={onDelete}
-          disabled={disabled}
-          className="gap-1.5"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-          <span>Delete</span>
-        </Button>
 
         <Button
           id="batch-clear-selection"

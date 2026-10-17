@@ -1,7 +1,15 @@
 import { Router } from 'express';
 import { WordService, CEFR_LEVELS, FolderNotFoundError } from '../services/words';
 import { FolderService } from '../services/folders';
-import { CreateWordDto, UpdateWordDto, BatchCefrDto, BatchDeleteDto, BatchFolderDto } from '../../src/types';
+import {
+  CreateWordDto,
+  UpdateWordDto,
+  BatchCefrDto,
+  BatchDeleteDto,
+  BatchFolderDto,
+  BatchRestoreDto,
+  BatchPermanentDeleteDto,
+} from '../../src/types';
 
 const router = Router();
 
@@ -44,6 +52,42 @@ router.get('/', (req, res) => {
   }
 });
 
+// GET /api/words/trash — Fetch soft-deleted words
+router.get('/trash', (req, res) => {
+  try {
+    const words = WordService.getTrashWords({
+      search: req.query.search as string,
+      level: req.query.level as string,
+    });
+    res.json(words);
+  } catch (error) {
+    console.error('Error fetching trash words:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/words/trash/count — Get count of soft-deleted words
+router.get('/trash/count', (_req, res) => {
+  try {
+    const count = WordService.getTrashCount();
+    res.json({ count });
+  } catch (error) {
+    console.error('Error fetching trash count:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/words/trash/empty — Permanently delete all words in trash
+router.delete('/trash/empty', (_req, res) => {
+  try {
+    const count = WordService.emptyTrash();
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error('Error emptying trash:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- Batch routes (must be declared before /:id routes) ---
 
 // POST /api/words/batch/cefr — Manually change CEFR level for multiple words
@@ -81,6 +125,38 @@ router.post('/batch/delete', (req, res) => {
   }
 });
 
+// POST /api/words/batch/restore — Restore multiple words from trash
+router.post('/batch/restore', (req, res) => {
+  try {
+    const { wordIds } = (req.body ?? {}) as Partial<BatchRestoreDto>;
+    if (!isValidIdList(wordIds)) {
+      return res.status(400).json({ error: 'wordIds must be a non-empty array of IDs' });
+    }
+
+    const count = WordService.batchRestoreWords(wordIds);
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error('Error batch restoring words:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/words/batch/permanent — Permanently delete multiple words
+router.post('/batch/permanent', (req, res) => {
+  try {
+    const { wordIds } = (req.body ?? {}) as Partial<BatchPermanentDeleteDto>;
+    if (!isValidIdList(wordIds)) {
+      return res.status(400).json({ error: 'wordIds must be a non-empty array of IDs' });
+    }
+
+    const count = WordService.batchPermanentDeleteWords(wordIds);
+    res.json({ success: true, count });
+  } catch (error) {
+    console.error('Error batch permanently deleting words:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /api/words/batch/folder — Add/remove multiple words to/from a folder
 router.post('/batch/folder', (req, res) => {
   try {
@@ -102,6 +178,34 @@ router.post('/batch/folder', (req, res) => {
       return res.status(404).json({ error: 'Folder not found' });
     }
     console.error('Error batch updating folder:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/words/:id/restore — Restore a single word from trash
+router.post('/:id/restore', (req, res) => {
+  try {
+    const success = WordService.restoreWord(req.params.id);
+    if (!success) {
+      return res.status(404).json({ error: 'Word not found in trash' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error restoring word:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// DELETE /api/words/:id/permanent — Permanently delete a single word
+router.delete('/:id/permanent', (req, res) => {
+  try {
+    const success = WordService.permanentDeleteWord(req.params.id);
+    if (!success) {
+      return res.status(404).json({ error: 'Word not found' });
+    }
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error permanently deleting word:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

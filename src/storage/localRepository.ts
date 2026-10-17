@@ -433,6 +433,162 @@ export class LocalRepository {
   }
 
   /**
+   * Fetch soft-deleted words (words in trash), optionally filtered and sorted by deleted_at DESC.
+   * Joins with learning_states and folder associations.
+   */
+  async getTrashWords(filters?: { search?: string; level?: string }): Promise<WordWithState[]> {
+    const [allWords, allStates, allWordFolders] = await Promise.all([
+      this.adapter.getAll<Word>('words'),
+      this.adapter.getAll<LearningState>('learning_states'),
+      this.adapter.getAll<LocalWordFolderRecord>('word_folders'),
+    ]);
+
+    const stateMap = new Map<string, LearningState>();
+    for (const state of allStates) {
+      stateMap.set(state.word_id, state);
+    }
+
+    const folderMap = new Map<string, string[]>();
+    for (const wf of allWordFolders) {
+      const existing = folderMap.get(wf.word_id) || [];
+      existing.push(wf.folder_id);
+      folderMap.set(wf.word_id, existing);
+    }
+
+    let trashWords = allWords.filter(
+      (w) => w.deleted_at !== null && w.deleted_at !== undefined
+    );
+
+    if (filters?.search) {
+      const q = filters.search.toLowerCase();
+      trashWords = trashWords.filter(
+        (w) => w.word.toLowerCase().includes(q) || w.meaning.toLowerCase().includes(q)
+      );
+    }
+
+    if (filters?.level) {
+      trashWords = trashWords.filter((w) => w.level === filters.level);
+    }
+
+    trashWords.sort((a, b) => {
+      const timeA = typeof a.deleted_at === 'number' ? a.deleted_at : new Date(a.deleted_at as any).getTime() || 0;
+      const timeB = typeof b.deleted_at === 'number' ? b.deleted_at : new Date(b.deleted_at as any).getTime() || 0;
+      return timeB - timeA;
+    });
+
+    return trashWords.map((word) => ({
+      ...word,
+      learning_state: stateMap.get(word.id) || this.createDefaultState(word.id, word.created_at),
+      folderIds: folderMap.get(word.id) || [],
+    }));
+  }
+
+  /**
+   * Count how many words are currently soft-deleted.
+   */
+  async getTrashCount(): Promise<number> {
+    const allWords = await this.adapter.getAll<Word>('words');
+    return allWords.filter(
+      (w) => w.deleted_at !== null && w.deleted_at !== undefined
+    ).length;
+  }
+
+  /**
+   * Restore a soft-deleted word from trash.
+   * Sets deleted_at = null, preserving learning state and review history intact.
+   */
+  async restoreWord(id: string): Promise<boolean> {
+    const word = await this.adapter.get<Word>('words', id);
+    if (!word || word.deleted_at === null || word.deleted_at === undefined) {
+      return false;
+    }
+
+    word.deleted_at = null;
+    word.updated_at = Date.now();
+    await this.adapter.put('words', word);
+    return true;
+  }
+
+  /**
+   * Permanently delete a word and cascade across learning_states, review_history, and word_folders.
+   */
+  async permanentDeleteWord(id: string): Promise<boolean> {
+    const word = await this.adapter.get<Word>('words', id);
+    if (!word) return false;
+
+    // Delete word
+    await this.adapter.delete('words', id);
+
+    // Cascade delete learning_states
+    const states = await this.adapter.queryByIndex<LearningState>('learning_states', 'word_id', id);
+    for (const state of states) {
+      await this.adapter.delete('learning_states', state.id);
+    }
+
+    // Cascade delete review_history
+    const reviews = await this.adapter.queryByIndex<LocalReviewHistoryRecord>('review_history', 'word_id', id);
+    for (const review of reviews) {
+      await this.adapter.delete('review_history', review.id);
+    }
+
+    // Cascade delete word_folders links
+    const links = await this.adapter.queryByIndex<LocalWordFolderRecord>('word_folders', 'word_id', id);
+    for (const link of links) {
+      await this.adapter.delete('word_folders', link.id);
+    }
+
+    return true;
+  }
+
+  /**
+   * Bulk restore soft-deleted words from trash.
+   */
+  async batchRestoreWords(wordIds: string[]): Promise<number> {
+    const uniqueIds = Array.from(new Set(wordIds));
+    let restoredCount = 0;
+
+    for (const id of uniqueIds) {
+      const restored = await this.restoreWord(id);
+      if (restored) restoredCount++;
+    }
+
+    return restoredCount;
+  }
+
+  /**
+   * Bulk permanently purge words from the database.
+   */
+  async batchPermanentDeleteWords(wordIds: string[]): Promise<number> {
+    const uniqueIds = Array.from(new Set(wordIds));
+    let purgedCount = 0;
+
+    for (const id of uniqueIds) {
+      const purged = await this.permanentDeleteWord(id);
+      if (purged) purgedCount++;
+    }
+
+    return purgedCount;
+  }
+
+  /**
+   * Permanently delete all soft-deleted words in trash.
+   */
+  async emptyTrash(): Promise<number> {
+    const allWords = await this.adapter.getAll<Word>('words');
+    const trashWords = allWords.filter(
+      (w) => w.deleted_at !== null && w.deleted_at !== undefined
+    );
+    let purgedCount = 0;
+
+    for (const word of trashWords) {
+      const purged = await this.permanentDeleteWord(word.id);
+      if (purged) purgedCount++;
+    }
+
+    return purgedCount;
+  }
+
+  /**
    * Batch updates the CEFR level for a list of words without altering learning states.
    */
   async batchUpdateCefr(wordIds: string[], level: CEFRLevel): Promise<number> {
@@ -1382,4 +1538,14 @@ export const exportLocalWordsCsv = (folderId?: string) => localRepository.export
 export const importLocalWordsCsv = (csvText: string) => localRepository.importWordsCsv(csvText);
 export const exportLocalSyncBundle = () => localRepository.exportSyncBundle();
 export const mergeLocalSyncBundle = (bundle: SyncBundle) => localRepository.mergeSyncBundle(bundle);
+export const getLocalTrashWords = (filters?: { search?: string; level?: string }) =>
+  localRepository.getTrashWords(filters);
+export const getLocalTrashCount = () => localRepository.getTrashCount();
+export const restoreLocalWord = (id: string) => localRepository.restoreWord(id);
+export const permanentDeleteLocalWord = (id: string) => localRepository.permanentDeleteWord(id);
+export const batchRestoreLocalWords = (wordIds: string[]) =>
+  localRepository.batchRestoreWords(wordIds);
+export const batchPermanentDeleteLocalWords = (wordIds: string[]) =>
+  localRepository.batchPermanentDeleteWords(wordIds);
+export const emptyLocalTrash = () => localRepository.emptyTrash();
 

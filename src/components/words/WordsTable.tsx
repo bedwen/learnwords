@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Pencil, FolderMinus, Trash2, BookOpen } from 'lucide-react';
+import { Pencil, FolderMinus, Trash2, BookOpen, RotateCcw } from 'lucide-react';
 import { WordWithState } from '../../types';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -17,12 +17,15 @@ interface WordsTableProps {
   loading: boolean;
   error: string | null;
   isUngrouped: boolean;
+  isTrash?: boolean;
   selectedWordIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
-  onEditWord: (word: WordWithState) => void;
-  onRemoveFromFolder: (word: WordWithState) => void;
-  onDeleteWord: (word: WordWithState) => void;
+  onEditWord?: (word: WordWithState) => void;
+  onRemoveFromFolder?: (word: WordWithState) => void;
+  onDeleteWord?: (word: WordWithState) => void;
+  onRestoreWord?: (word: WordWithState) => void;
+  onPermanentDeleteWord?: (word: WordWithState) => void;
 }
 
 const checkboxClass =
@@ -33,12 +36,15 @@ export function WordsTable({
   loading,
   error,
   isUngrouped,
+  isTrash = false,
   selectedWordIds,
   onToggleSelect,
   onToggleSelectAll,
   onEditWord,
   onRemoveFromFolder,
   onDeleteWord,
+  onRestoreWord,
+  onPermanentDeleteWord,
 }: WordsTableProps) {
   const headerCheckboxRef = useRef<HTMLInputElement>(null);
   const allSelected = words.length > 0 && words.every((w) => selectedWordIds.has(w.id));
@@ -66,11 +72,15 @@ export function WordsTable({
       ) : words.length === 0 ? (
         <div className="p-16 text-center space-y-3">
           <div className="mx-auto w-12 h-12 rounded-full bg-secondary flex items-center justify-center text-muted-foreground">
-            <BookOpen className="h-6 w-6" />
+            {isTrash ? <Trash2 className="h-6 w-6" /> : <BookOpen className="h-6 w-6" />}
           </div>
-          <h3 className="text-base font-semibold text-foreground">No words found</h3>
+          <h3 className="text-base font-semibold text-foreground">
+            {isTrash ? 'Trash bin is empty' : 'No words found'}
+          </h3>
           <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-            Try adjusting your search criteria or add new words to start learning.
+            {isTrash
+              ? 'Words you delete will appear here.'
+              : 'Try adjusting your search criteria or add new words to start learning.'}
           </p>
         </div>
       ) : (
@@ -94,7 +104,9 @@ export function WordsTable({
                   <TableHead className="px-6 py-3.5 font-semibold text-foreground">Word</TableHead>
                   <TableHead className="px-6 py-3.5 font-semibold text-foreground">Level</TableHead>
                   <TableHead className="px-6 py-3.5 font-semibold text-foreground">Meaning</TableHead>
-                  <TableHead className="px-6 py-3.5 font-semibold text-foreground">Status</TableHead>
+                  <TableHead className="px-6 py-3.5 font-semibold text-foreground">
+                    {isTrash ? 'Deleted Date' : 'Status'}
+                  </TableHead>
                   <TableHead className="px-6 py-3.5 font-semibold text-foreground text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -138,45 +150,80 @@ export function WordsTable({
                       <TableCell className="px-6 py-3.5 text-muted-foreground font-medium max-w-xs truncate">
                         {word.meaning}
                       </TableCell>
-                      <TableCell className="px-6 py-3.5">
-                        <Badge variant={statusLabel as any}>
-                          {statusLabel}
-                        </Badge>
-                      </TableCell>
+                      {isTrash ? (
+                        <TableCell className="px-6 py-3.5 text-muted-foreground text-xs font-medium">
+                          {word.deleted_at ? new Date(word.deleted_at).toLocaleDateString() : '—'}
+                        </TableCell>
+                      ) : (
+                        <TableCell className="px-6 py-3.5">
+                          <Badge variant={statusLabel as any}>
+                            {statusLabel}
+                          </Badge>
+                        </TableCell>
+                      )}
                       <TableCell className="px-6 py-3.5 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onEditWord(word)}
-                            className="h-8 px-2 text-muted-foreground hover:text-foreground"
-                            title="Edit word"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                            <span className="ml-1 text-xs">Edit</span>
-                          </Button>
-                          {!isUngrouped && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onRemoveFromFolder(word)}
-                              className="h-8 px-2 text-muted-foreground hover:text-amber-600"
-                              title="Remove from folder"
-                            >
-                              <FolderMinus className="h-3.5 w-3.5" />
-                              <span className="ml-1 text-xs">Remove</span>
-                            </Button>
+                          {isTrash ? (
+                            <>
+                              <Button
+                                id={`restore-word-${word.id}`}
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onRestoreWord?.(word)}
+                                className="h-8 px-2 text-muted-foreground hover:text-primary"
+                                title="Restore word"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                <span className="ml-1 text-xs">Restore</span>
+                              </Button>
+                              <Button
+                                id={`permanent-delete-word-${word.id}`}
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onPermanentDeleteWord?.(word)}
+                                className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                                title="Delete forever"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span className="ml-1 text-xs">Delete Forever</span>
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onEditWord?.(word)}
+                                className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                                title="Edit word"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span className="ml-1 text-xs">Edit</span>
+                              </Button>
+                              {!isUngrouped && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => onRemoveFromFolder?.(word)}
+                                  className="h-8 px-2 text-muted-foreground hover:text-amber-600"
+                                  title="Remove from folder"
+                                >
+                                  <FolderMinus className="h-3.5 w-3.5" />
+                                  <span className="ml-1 text-xs">Remove</span>
+                                </Button>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onDeleteWord?.(word)}
+                                className="h-8 px-2 text-muted-foreground hover:text-destructive"
+                                title="Delete word"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span className="ml-1 text-xs">Delete</span>
+                              </Button>
+                            </>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onDeleteWord(word)}
-                            className="h-8 px-2 text-muted-foreground hover:text-destructive"
-                            title="Delete word"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                            <span className="ml-1 text-xs">Delete</span>
-                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -240,9 +287,15 @@ export function WordsTable({
                       <Badge variant={word.level} className="font-semibold text-xs">
                         {word.level}
                       </Badge>
-                      <Badge variant={statusLabel as any} className="text-xs">
-                        {statusLabel}
-                      </Badge>
+                      {isTrash ? (
+                        <Badge variant="outline" className="text-xs text-muted-foreground">
+                          {word.deleted_at ? new Date(word.deleted_at).toLocaleDateString() : 'Deleted'}
+                        </Badge>
+                      ) : (
+                        <Badge variant={statusLabel as any} className="text-xs">
+                          {statusLabel}
+                        </Badge>
+                      )}
                     </div>
                   </div>
 
@@ -251,38 +304,67 @@ export function WordsTable({
                   </p>
 
                   <div className="flex items-center justify-end gap-1 pt-1 border-t border-border/40 pl-7">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEditWord(word)}
-                      className="h-9 px-3 text-muted-foreground hover:text-foreground touch-manipulation"
-                      title="Edit word"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      <span className="ml-1.5 text-xs font-medium">Edit</span>
-                    </Button>
-                    {!isUngrouped && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onRemoveFromFolder(word)}
-                        className="h-9 px-3 text-muted-foreground hover:text-amber-600 touch-manipulation"
-                        title="Remove from folder"
-                      >
-                        <FolderMinus className="h-4 w-4" />
-                        <span className="ml-1.5 text-xs font-medium">Remove</span>
-                      </Button>
+                    {isTrash ? (
+                      <>
+                        <Button
+                          id={`mobile-restore-word-${word.id}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onRestoreWord?.(word)}
+                          className="h-9 px-3 text-muted-foreground hover:text-primary touch-manipulation"
+                          title="Restore word"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          <span className="ml-1.5 text-xs font-medium">Restore</span>
+                        </Button>
+                        <Button
+                          id={`mobile-permanent-delete-word-${word.id}`}
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onPermanentDeleteWord?.(word)}
+                          className="h-9 px-3 text-muted-foreground hover:text-destructive touch-manipulation"
+                          title="Delete forever"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="ml-1.5 text-xs font-medium">Delete Forever</span>
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditWord?.(word)}
+                          className="h-9 px-3 text-muted-foreground hover:text-foreground touch-manipulation"
+                          title="Edit word"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          <span className="ml-1.5 text-xs font-medium">Edit</span>
+                        </Button>
+                        {!isUngrouped && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onRemoveFromFolder?.(word)}
+                            className="h-9 px-3 text-muted-foreground hover:text-amber-600 touch-manipulation"
+                            title="Remove from folder"
+                          >
+                            <FolderMinus className="h-4 w-4" />
+                            <span className="ml-1.5 text-xs font-medium">Remove</span>
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onDeleteWord?.(word)}
+                          className="h-9 px-3 text-muted-foreground hover:text-destructive touch-manipulation"
+                          title="Delete word"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span className="ml-1.5 text-xs font-medium">Delete</span>
+                        </Button>
+                      </>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onDeleteWord(word)}
-                      className="h-9 px-3 text-muted-foreground hover:text-destructive touch-manipulation"
-                      title="Delete word"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="ml-1.5 text-xs font-medium">Delete</span>
-                    </Button>
                   </div>
                 </div>
               );

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, GraduationCap, Plus } from 'lucide-react';
+import { ArrowLeft, GraduationCap, Plus, Trash2 } from 'lucide-react';
 import { WordWithState, Folder, FolderListResponse, CEFRLevel } from '../types';
 import {
   getWords,
@@ -11,6 +11,13 @@ import {
   batchUpdateCefr,
   batchDeleteWords,
   batchUpdateFolder,
+  getTrashWords,
+  getTrashCount,
+  restoreWord,
+  permanentDeleteWord,
+  batchRestoreWords,
+  batchPermanentDeleteWords,
+  emptyTrash,
 } from '../api/words';
 import { getFolders, createFolder, updateFolder, deleteFolder as deleteFolderApi } from '../api/folders';
 import { getCached, setCached } from '../api/cache';
@@ -50,9 +57,10 @@ export function Words() {
   const cachedFolders = getCached<FolderListResponse>('folders_list');
   const [folders, setFolders] = useState<Folder[]>(cachedFolders ? cachedFolders.folders : []);
   const [ungroupedCount, setUngroupedCount] = useState(cachedFolders ? cachedFolders.ungroupedCount : 0);
+  const [trashCount, setTrashCount] = useState(0);
   const [foldersLoading, setFoldersLoading] = useState(!cachedFolders);
 
-  // Current view: null = folder grid, string = specific folder ID, 'ungrouped' = ungrouped
+  // Current view: null = folder grid, string = specific folder ID, 'ungrouped' = ungrouped, 'trash' = trash bin
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [activeFolderName, setActiveFolderName] = useState('');
 
@@ -81,6 +89,10 @@ export function Words() {
   const [isDeleteWordOpen, setIsDeleteWordOpen] = useState(false);
   const [deletingWord, setDeletingWord] = useState<WordWithState | undefined>();
 
+  const [isPermanentDeleteWordOpen, setIsPermanentDeleteWordOpen] = useState(false);
+  const [deletingPermanentWord, setDeletingPermanentWord] = useState<WordWithState | undefined>();
+  const [isEmptyTrashOpen, setIsEmptyTrashOpen] = useState(false);
+
   const [isFolderFormOpen, setIsFolderFormOpen] = useState(false);
   const [editingFolder, setEditingFolder] = useState<Folder | undefined>();
   const [isDeleteFolderOpen, setIsDeleteFolderOpen] = useState(false);
@@ -90,21 +102,26 @@ export function Words() {
   const [selectedWordIds, setSelectedWordIds] = useState<Set<string>>(new Set());
   const [batchBusy, setBatchBusy] = useState(false);
   const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
+  const [isBatchPermanentDeleteOpen, setIsBatchPermanentDeleteOpen] = useState(false);
   const [isBatchCefrOpen, setIsBatchCefrOpen] = useState(false);
   const [batchLevel, setBatchLevel] = useState<CEFRLevel>('A1');
   const [isBatchFolderOpen, setIsBatchFolderOpen] = useState(false);
   const [batchFolderId, setBatchFolderId] = useState('');
 
-  // Fetch folders
+  // Fetch folders and trash count
   const fetchFolders = useCallback(async () => {
     if (!getCached('folders_list')) {
       setFoldersLoading(true);
     }
     try {
-      const data = await getFolders();
-      setFolders(data.folders);
-      setUngroupedCount(data.ungroupedCount);
-      setCached('folders_list', data);
+      const [foldersData, trashData] = await Promise.all([
+        getFolders(),
+        getTrashCount(),
+      ]);
+      setFolders(foldersData.folders);
+      setUngroupedCount(foldersData.ungroupedCount);
+      setTrashCount(trashData.count);
+      setCached('folders_list', foldersData);
     } catch (err) {
       console.error('Failed to fetch folders:', err);
     } finally {
@@ -116,18 +133,26 @@ export function Words() {
     fetchFolders();
   }, [fetchFolders]);
 
-  // Fetch words inside active folder
+  // Fetch words inside active folder or trash bin
   const fetchWords = useCallback(async () => {
     if (activeFolderId === null) return;
     setWordsLoading(true);
     try {
-      const data = await getWords({
-        search: debouncedSearch,
-        level,
-        status,
-        folderId: activeFolderId,
-      });
-      setWords(data);
+      if (activeFolderId === 'trash') {
+        const data = await getTrashWords({
+          search: debouncedSearch,
+          level,
+        });
+        setWords(data);
+      } else {
+        const data = await getWords({
+          search: debouncedSearch,
+          level,
+          status,
+          folderId: activeFolderId,
+        });
+        setWords(data);
+      }
       setError(null);
     } catch (err) {
       setError('An error occurred while loading words.');
@@ -253,7 +278,8 @@ export function Words() {
     setSelectedWordIds(allSelected ? new Set() : new Set(words.map((w) => w.id)));
   };
 
-  const isRealFolder = activeFolderId !== null && activeFolderId !== 'ungrouped';
+  const isRealFolder = activeFolderId !== null && activeFolderId !== 'ungrouped' && activeFolderId !== 'trash';
+  const isTrash = activeFolderId === 'trash';
   const addTargetFolders = folders.filter((f) => f.id !== activeFolderId);
 
   const runBatchAction = async (
@@ -300,6 +326,67 @@ export function Words() {
       const { count } = await batchDeleteWords(ids);
       return `${pluralizeWords(count)} deleted.`;
     }, 'Failed to delete words.', () => setIsBatchDeleteOpen(false));
+  };
+
+  // Trash single handlers
+  const handleRestoreWord = async (word: WordWithState) => {
+    try {
+      await restoreWord(word.id);
+      toast.success('Word restored.');
+      fetchWords();
+      fetchFolders();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to restore word.'));
+    }
+  };
+
+  const handlePermanentDeleteWordClick = (word: WordWithState) => {
+    setDeletingPermanentWord(word);
+    setIsPermanentDeleteWordOpen(true);
+  };
+
+  const confirmPermanentDeleteWord = async () => {
+    if (!deletingPermanentWord) return;
+    try {
+      await permanentDeleteWord(deletingPermanentWord.id);
+      setIsPermanentDeleteWordOpen(false);
+      setDeletingPermanentWord(undefined);
+      toast.success('Word permanently deleted.');
+      fetchWords();
+      fetchFolders();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to delete word permanently.'));
+    }
+  };
+
+  // Trash batch handlers
+  const handleBatchRestore = async () => {
+    const ids = [...selectedWordIds];
+    await runBatchAction(async () => {
+      const { count } = await batchRestoreWords(ids);
+      return `${pluralizeWords(count)} restored.`;
+    }, 'Failed to restore words.');
+  };
+
+  const confirmBatchPermanentDelete = async () => {
+    const ids = [...selectedWordIds];
+    await runBatchAction(async () => {
+      const { count } = await batchPermanentDeleteWords(ids);
+      return `${pluralizeWords(count)} permanently deleted.`;
+    }, 'Failed to permanently delete words.', () => setIsBatchPermanentDeleteOpen(false));
+  };
+
+  const confirmEmptyTrash = async () => {
+    try {
+      await emptyTrash();
+      setIsEmptyTrashOpen(false);
+      toast.success('Trash emptied.');
+      clearSelection();
+      fetchWords();
+      fetchFolders();
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to empty trash.'));
+    }
   };
 
   const confirmBatchAddToFolder = async () => {
@@ -371,7 +458,7 @@ export function Words() {
   };
 
   const getPreSelectedFolderIds = (): string[] => {
-    if (activeFolderId && activeFolderId !== 'ungrouped') {
+    if (activeFolderId && activeFolderId !== 'ungrouped' && activeFolderId !== 'trash') {
       return [activeFolderId];
     }
     return [];
@@ -384,6 +471,7 @@ export function Words() {
         <FolderGrid
           folders={folders}
           ungroupedCount={ungroupedCount}
+          trashCount={trashCount}
           loading={foldersLoading}
           onOpenFolder={openFolder}
           onNewFolder={handleCreateFolderClick}
@@ -392,7 +480,7 @@ export function Words() {
           onDeleteFolder={handleDeleteFolderClick}
         />
       ) : (
-        /* Layer 2: Folder Contents */
+        /* Layer 2: Folder / Trash Contents */
         <div className={`py-8 space-y-6 ${selectedWordIds.size > 0 ? 'pb-32' : ''}`}>
           {/* Top Bar */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -407,21 +495,44 @@ export function Words() {
                 <span>Folders</span>
               </Button>
               <div className="h-5 w-px bg-border hidden sm:block" />
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">{activeFolderName}</h1>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground">{activeFolderName}</h1>
+                {isTrash && (
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Deleted words are kept here. Restore them anytime or permanently delete them.
+                  </p>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2.5">
-              <Button
-                variant="secondary"
-                className="gap-1.5"
-                onClick={() => navigate(activeFolderId ? `/study?folderId=${activeFolderId}` : '/study')}
-              >
-                <GraduationCap className="h-4 w-4" />
-                <span>Study Folder</span>
-              </Button>
-              <Button onClick={handleAddWordClick} className="gap-1.5 shadow-sm">
-                <Plus className="h-4 w-4" />
-                <span>Add Word</span>
-              </Button>
+              {isTrash ? (
+                words.length > 0 && (
+                  <Button
+                    id="empty-trash-btn"
+                    variant="danger"
+                    className="gap-1.5"
+                    onClick={() => setIsEmptyTrashOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>Empty Trash</span>
+                  </Button>
+                )
+              ) : (
+                <>
+                  <Button
+                    variant="secondary"
+                    className="gap-1.5"
+                    onClick={() => navigate(activeFolderId ? `/study?folderId=${activeFolderId}` : '/study')}
+                  >
+                    <GraduationCap className="h-4 w-4" />
+                    <span>Study Folder</span>
+                  </Button>
+                  <Button onClick={handleAddWordClick} className="gap-1.5 shadow-sm">
+                    <Plus className="h-4 w-4" />
+                    <span>Add Word</span>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
@@ -441,18 +552,24 @@ export function Words() {
             loading={wordsLoading}
             error={error}
             isUngrouped={activeFolderId === 'ungrouped'}
+            isTrash={isTrash}
             selectedWordIds={selectedWordIds}
             onToggleSelect={handleToggleSelect}
             onToggleSelectAll={handleToggleSelectAll}
             onEditWord={handleEditWordClick}
             onRemoveFromFolder={handleRemoveFromFolder}
             onDeleteWord={handleDeleteWordClick}
+            onRestoreWord={handleRestoreWord}
+            onPermanentDeleteWord={handlePermanentDeleteWordClick}
           />
 
           <BatchActionBar
             selectedCount={selectedWordIds.size}
             canRemoveFromFolder={isRealFolder}
+            isTrash={isTrash}
             disabled={batchBusy}
+            onRestore={handleBatchRestore}
+            onPermanentDelete={() => setIsBatchPermanentDeleteOpen(true)}
             onChangeLevel={openBatchCefr}
             onAddToFolder={openBatchFolder}
             onRemoveFromFolder={handleBatchRemoveFromFolder}
@@ -615,6 +732,69 @@ export function Words() {
               disabled={batchBusy || !batchFolderId}
             >
               Add
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Permanent Delete Word Confirmation */}
+      <Modal
+        isOpen={isPermanentDeleteWordOpen}
+        onClose={() => setIsPermanentDeleteWordOpen(false)}
+        title="Permanently Delete Word"
+      >
+        <div className="space-y-6">
+          <p className="text-surface-600">
+            Permanently delete <strong>{deletingPermanentWord?.word}</strong>? Its study history will be permanently erased. This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setIsPermanentDeleteWordOpen(false)}>
+              Cancel
+            </Button>
+            <Button id="confirm-permanent-delete-btn" variant="danger" onClick={confirmPermanentDeleteWord}>
+              Delete Forever
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Batch Permanent Delete Confirmation */}
+      <Modal
+        isOpen={isBatchPermanentDeleteOpen}
+        onClose={() => setIsBatchPermanentDeleteOpen(false)}
+        title="Permanently Delete Words"
+      >
+        <div className="space-y-6">
+          <p className="text-surface-600">
+            Are you sure you want to permanently delete <strong>{pluralizeWords(selectedWordIds.size)}</strong> and their entire study history? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setIsBatchPermanentDeleteOpen(false)} disabled={batchBusy}>
+              Cancel
+            </Button>
+            <Button id="batch-permanent-delete-confirm" variant="danger" onClick={confirmBatchPermanentDelete} disabled={batchBusy}>
+              Delete {pluralizeWords(selectedWordIds.size)} Forever
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Empty Trash Confirmation */}
+      <Modal
+        isOpen={isEmptyTrashOpen}
+        onClose={() => setIsEmptyTrashOpen(false)}
+        title="Empty Trash Bin"
+      >
+        <div className="space-y-6">
+          <p className="text-surface-600">
+            Are you sure you want to permanently delete all words in the trash? This cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setIsEmptyTrashOpen(false)}>
+              Cancel
+            </Button>
+            <Button id="confirm-empty-trash-btn" variant="danger" onClick={confirmEmptyTrash}>
+              Empty Trash
             </Button>
           </div>
         </div>

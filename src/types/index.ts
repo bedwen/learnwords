@@ -73,6 +73,18 @@ export interface BatchFolderDto {
   action: 'add' | 'remove';
 }
 
+export interface TrashCountResponse {
+  count: number;
+}
+
+export interface BatchRestoreDto {
+  wordIds: string[];
+}
+
+export interface BatchPermanentDeleteDto {
+  wordIds: string[];
+}
+
 export interface CEFRStats {
   level: CEFRLevel;
   totalWords: number;

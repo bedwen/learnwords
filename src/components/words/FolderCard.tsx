@@ -91,3 +91,47 @@ export function UngroupedCard({ count, onClick }: UngroupedCardProps) {
     </Card>
   );
 }
+
+interface TrashCardProps {
+  count: number;
+  onClick: () => void;
+}
+
+export function TrashCard({ count, onClick }: TrashCardProps) {
+  return (
+    <Card
+      onClick={onClick}
+      className="group relative border-dashed border-border bg-card/60 p-5 text-left transition-all duration-200 hover:shadow-md hover:border-destructive/40 cursor-pointer overflow-hidden"
+    >
+      <div
+        className={`absolute left-0 top-3 bottom-3 w-1.5 rounded-r-full transition-colors ${
+          count > 0 ? 'bg-destructive/60' : 'bg-muted-foreground/30'
+        }`}
+      />
+
+      <div className="pl-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <Trash2
+            className={`h-4 w-4 shrink-0 transition-colors ${
+              count > 0 ? 'text-destructive' : 'text-muted-foreground'
+            }`}
+          />
+          <h3 className="text-base font-semibold text-foreground tracking-tight">
+            Trash Bin
+          </h3>
+        </div>
+
+        <div className="flex items-center gap-2 pt-1">
+          <Badge
+            variant={count > 0 ? 'secondary' : 'outline'}
+            className={`text-xs font-normal ${
+              count > 0 ? 'text-destructive font-medium' : 'text-muted-foreground'
+            }`}
+          >
+            {count} deleted {count === 1 ? 'word' : 'words'}
+          </Badge>
+        </div>
+      </div>
+    </Card>
+  );
+}

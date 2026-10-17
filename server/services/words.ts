@@ -254,6 +254,145 @@ export class WordService {
   }
 
   /**
+   * Fetch soft-deleted words (words in trash), optionally filtered by search or level.
+   * Joins with learning_states to return full WordWithState objects, ordered by deleted_at DESC.
+   */
+  static getTrashWords(filters?: {
+    search?: string;
+    level?: string;
+  }): WordWithState[] {
+    const db = getDatabase();
+
+    let query = `
+      SELECT 
+        w.*,
+        ls.id as ls_id,
+        ls.word_id as ls_word_id,
+        ls.mastery as ls_mastery,
+        ls.interval_step as ls_interval_step,
+        ls.next_review as ls_next_review,
+        ls.last_reviewed as ls_last_reviewed,
+        ls.review_count as ls_review_count,
+        ls.correct_count as ls_correct_count,
+        ls.wrong_count as ls_wrong_count,
+        ls.consecutive_correct as ls_consecutive_correct
+      FROM words w
+      LEFT JOIN learning_states ls ON w.id = ls.word_id
+      WHERE w.deleted_at IS NOT NULL
+    `;
+
+    const params: any[] = [];
+
+    if (filters?.search) {
+      query += ' AND (w.word LIKE ? OR w.meaning LIKE ?)';
+      params.push(`%${filters.search}%`, `%${filters.search}%`);
+    }
+
+    if (filters?.level) {
+      query += ' AND w.level = ?';
+      params.push(filters.level);
+    }
+
+    query += ' ORDER BY w.deleted_at DESC';
+
+    const rows = db.prepare(query).all(...params) as any[];
+
+    return rows.map((row) => {
+      const word = this.mapRowToWordWithState(row);
+      const folderIds = FolderService.getWordFolderIds(row.id);
+      return { ...word, folderIds };
+    });
+  }
+
+  /**
+   * Count how many words are currently in the trash bin.
+   */
+  static getTrashCount(): number {
+    const db = getDatabase();
+    const row = db.prepare('SELECT COUNT(*) as count FROM words WHERE deleted_at IS NOT NULL').get() as { count: number } | undefined;
+    return row ? row.count : 0;
+  }
+
+  /**
+   * Restore a soft-deleted word from trash.
+   * Sets deleted_at = NULL, preserving 100% of its learning_states and review history.
+   */
+  static restoreWord(id: string): boolean {
+    const db = getDatabase();
+    const result = db.prepare('UPDATE words SET deleted_at = NULL, updated_at = datetime(\'now\') WHERE id = ? AND deleted_at IS NOT NULL').run(id);
+    return result.changes > 0;
+  }
+
+  /**
+   * Permanently delete a word from the database.
+   * Cascading foreign keys will delete associated learning_states, review_history, and word_folders.
+   */
+  static permanentDeleteWord(id: string): boolean {
+    const db = getDatabase();
+    const result = db.prepare('DELETE FROM words WHERE id = ?').run(id);
+    return result.changes > 0;
+  }
+
+  /**
+   * Bulk restore soft-deleted words from trash.
+   * Preserves learning states for all restored words.
+   */
+  static batchRestoreWords(wordIds: string[]): number {
+    const ids = Array.from(new Set(wordIds));
+    if (ids.length === 0) return 0;
+
+    const db = getDatabase();
+    const stmt = db.prepare('UPDATE words SET deleted_at = NULL, updated_at = datetime(\'now\') WHERE id = ? AND deleted_at IS NOT NULL');
+
+    const transaction = db.transaction((idList: string[]) => {
+      let count = 0;
+      for (const id of idList) {
+        count += stmt.run(id).changes;
+      }
+      return count;
+    });
+
+    return transaction(ids);
+  }
+
+  /**
+   * Bulk permanently purge words from the database.
+   * Cascades delete associated records.
+   */
+  static batchPermanentDeleteWords(wordIds: string[]): number {
+    const ids = Array.from(new Set(wordIds));
+    if (ids.length === 0) return 0;
+
+    const db = getDatabase();
+    const stmt = db.prepare('DELETE FROM words WHERE id = ?');
+
+    const transaction = db.transaction((idList: string[]) => {
+      let count = 0;
+      for (const id of idList) {
+        count += stmt.run(id).changes;
+      }
+      return count;
+    });
+
+    return transaction(ids);
+  }
+
+  /**
+   * Permanently delete all soft-deleted words in trash.
+   * Returns count of purged words.
+   */
+  static emptyTrash(): number {
+    const db = getDatabase();
+    let count = 0;
+    const transaction = db.transaction(() => {
+      const result = db.prepare('DELETE FROM words WHERE deleted_at IS NOT NULL').run();
+      count = result.changes;
+    });
+    transaction();
+    return count;
+  }
+
+  /**
    * Manually change the CEFR level of multiple words (user-initiated only).
    * Learning state and review history are never touched.
    * Returns the number of words updated.

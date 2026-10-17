@@ -2,11 +2,12 @@ import React from 'react';
 import { FolderPlus, Plus } from 'lucide-react';
 import { Folder } from '../../types';
 import { Button } from '../ui/Button';
-import { FolderCard, UngroupedCard } from './FolderCard';
+import { FolderCard, UngroupedCard, TrashCard } from './FolderCard';
 
 interface FolderGridProps {
   folders: Folder[];
   ungroupedCount: number;
+  trashCount?: number;
   loading: boolean;
   onOpenFolder: (folderId: string, folderName: string) => void;
   onNewFolder: () => void;
@@ -18,6 +19,7 @@ interface FolderGridProps {
 export function FolderGrid({
   folders,
   ungroupedCount,
+  trashCount = 0,
   loading,
   onOpenFolder,
   onNewFolder,
@@ -69,6 +71,11 @@ export function FolderGrid({
           <UngroupedCard
             count={ungroupedCount}
             onClick={() => onOpenFolder('ungrouped', 'Ungrouped')}
+          />
+
+          <TrashCard
+            count={trashCount}
+            onClick={() => onOpenFolder('trash', 'Trash Bin')}
           />
         </div>
       )}

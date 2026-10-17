@@ -21,6 +21,14 @@ Folders keep related vocabulary together. You can filter words by CEFR level or 
 Inside each folder, you can view all saved words in a clean table with their CEFR level, meaning, and mastery status.
 ![Words Table](imagesforreadme/words_table.png)
 
+### **Word Trash Bin & Safe Restoration**
+
+When words are deleted, they are safely moved to the **Trash Bin** card in the folder grid instead of being permanently erased.
+
+- **Safe Restoration:** Restore words individually or in bulk. Spaced repetition progress, mastery level, and review logs are 100% preserved.
+- **Permanent Purge:** Selectively delete words forever or use "Empty Trash" with confirmation when you want to permanently clear clutter.
+- **Search & Filter:** Search across deleted words and filter by CEFR level directly within the trash view.
+
 ---
 ## **Creating Folders & Adding Words**
 
