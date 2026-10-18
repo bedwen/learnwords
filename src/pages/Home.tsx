@@ -128,18 +128,18 @@ export function Home() {
 
   const getHeatmapColor = (count: number) => {
     if (count === 0) {
-      return 'bg-stone-200/60 dark:bg-stone-800/80 border border-stone-300/30 dark:border-stone-700/30';
+      return 'bg-secondary/80 dark:bg-secondary/50 border border-border/60';
     }
     if (count <= 2) {
-      return 'bg-amber-300/70 dark:bg-amber-900/50';
+      return 'bg-emerald-800/20 dark:bg-emerald-400/20';
     }
     if (count <= 5) {
-      return 'bg-amber-500/80 dark:bg-amber-700/70';
+      return 'bg-emerald-800/45 dark:bg-emerald-400/45';
     }
     if (count <= 10) {
-      return 'bg-amber-700 dark:bg-amber-600';
+      return 'bg-emerald-800/70 dark:bg-emerald-400/70';
     }
-    return 'bg-amber-900 dark:bg-amber-500';
+    return 'bg-primary dark:bg-primary';
   };
 
   const formatDate = (dateStr: string) => {
@@ -197,7 +197,7 @@ export function Home() {
           <div className="flex flex-col sm:flex-row gap-3 pt-6 relative z-10">
             <Button
               size="lg"
-              className="h-12 flex-1 justify-center gap-2 font-semibold shadow-xs"
+              className="h-12 flex-1 justify-center gap-2 rounded-2xl font-semibold shadow-xs"
               onClick={() => navigate('/study')}
             >
               <GraduationCap className="h-4 w-4" />
@@ -206,7 +206,7 @@ export function Home() {
             <Button
               variant="outline"
               size="lg"
-              className="h-12 flex-1 justify-center gap-2"
+              className="h-12 flex-1 justify-center gap-2 rounded-2xl"
               onClick={() => navigate('/words')}
             >
               <Plus className="h-4 w-4" />
@@ -220,7 +220,7 @@ export function Home() {
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-4 pb-2 border-b border-border/40">
               <div className="flex items-center gap-1.5 font-medium text-xs text-foreground">
-                <CalendarDays className="h-3.5 w-3.5 text-amber-600 dark:text-amber-500" />
+                <CalendarDays className="h-3.5 w-3.5 text-primary" />
                 <span>Activity Calendar</span>
                 <span className="text-[11px] text-muted-foreground font-normal">(Past 90 Days)</span>
               </div>
@@ -279,7 +279,7 @@ export function Home() {
                           <div
                             key={day.date || `${colIdx}-${rowIdx}`}
                             title={getTooltipText(day)}
-                            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-[3px] transition-colors ${getHeatmapColor(day.count)}`}
+                            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-[4px] transition-colors ${getHeatmapColor(day.count)}`}
                           />
                         ))}
                       </div>
@@ -293,85 +293,93 @@ export function Home() {
           {/* Legend */}
           <div className="flex items-center justify-end gap-1.5 text-[10px] text-muted-foreground pt-3 border-t border-border/40 mt-4">
             <span>Less</span>
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-stone-200/60 dark:bg-stone-800/80 border border-stone-300/30 dark:border-stone-700/30" />
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-amber-300/70 dark:bg-amber-900/50" />
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-amber-500/80 dark:bg-amber-700/70" />
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-amber-700 dark:bg-amber-600" />
-            <div className="w-2.5 h-2.5 rounded-[2px] bg-amber-900 dark:bg-amber-500" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-secondary/80 dark:bg-secondary/50 border border-border/60" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-800/20 dark:bg-emerald-400/20" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-800/45 dark:bg-emerald-400/45" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-emerald-800/70 dark:bg-emerald-400/70" />
+            <div className="w-2.5 h-2.5 rounded-[3px] bg-primary dark:bg-primary" />
             <span>More</span>
           </div>
         </Card>
       </div>
 
-      {/* KPI Overview Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      {/* KPI Overview Metrics — Unified Stat Ribbon */}
+      <div className="rounded-2xl bg-secondary/45 border border-border/60 p-4 sm:p-6 grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 lg:divide-x lg:divide-border/60">
+        <div className="flex flex-col justify-between lg:first:pl-0 lg:pl-6">
+          <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Total Words
             </CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+            <div className="w-8 h-8 rounded-xl bg-card/80 border border-border/50 flex items-center justify-center">
+              <BookOpen className="h-4 w-4 text-muted-foreground" />
+            </div>
+          </div>
+          <div>
             <div className="text-2xl font-bold text-foreground">
               {summary.totalWords.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Active in your dictionary
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <div className="flex flex-col justify-between lg:first:pl-0 lg:pl-6">
+          <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Due For Review
             </CardTitle>
-            <Clock className={`h-4 w-4 ${summary.dueForReview > 0 ? 'text-amber-500' : 'text-muted-foreground'}`} />
-          </CardHeader>
-          <CardContent>
+            <div className="w-8 h-8 rounded-xl bg-card/80 border border-border/50 flex items-center justify-center">
+              <Clock className={`h-4 w-4 ${summary.dueForReview > 0 ? 'text-amber-500' : 'text-muted-foreground'}`} />
+            </div>
+          </div>
+          <div>
             <div className="text-2xl font-bold text-foreground">
               {summary.dueForReview.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {summary.dueForReview > 0 ? 'Scheduled for today' : 'Up to date'}
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <div className="flex flex-col justify-between lg:first:pl-0 lg:pl-6">
+          <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Mastered Words
             </CardTitle>
-            <Award className="h-4 w-4 text-emerald-500" />
-          </CardHeader>
-          <CardContent>
+            <div className="w-8 h-8 rounded-xl bg-card/80 border border-border/50 flex items-center justify-center">
+              <Award className="h-4 w-4 text-emerald-500" />
+            </div>
+          </div>
+          <div>
             <div className="text-2xl font-bold text-foreground">
               {totalMastered.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Step 4 mastery achieved
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <div className="flex flex-col justify-between lg:first:pl-0 lg:pl-6">
+          <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Mastery Rate
             </CardTitle>
-            <TrendingUp className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
+            <div className="w-8 h-8 rounded-xl bg-card/80 border border-border/50 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-blue-500" />
+            </div>
+          </div>
+          <div>
             <div className="text-2xl font-bold text-foreground">
               {masteryRate}%
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Of all registered vocabulary
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       {/* CEFR Level Breakdown */}

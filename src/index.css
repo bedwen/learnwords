@@ -5,33 +5,39 @@
 :root {
   --radius: 0.75rem;
 
-  --background: 250 248 245;
-  --foreground: 41 37 36;
+  --background: 249 247 242;
+  --foreground: 34 38 36;
 
-  --card: 255 255 255;
-  --card-foreground: 41 37 36;
+  --card: 255 253 249;
+  --card-foreground: 34 38 36;
 
-  --popover: 255 255 255;
-  --popover-foreground: 41 37 36;
+  --popover: 255 253 249;
+  --popover-foreground: 34 38 36;
 
-  --primary: 41 37 36;
-  --primary-foreground: 255 255 255;
+  --primary: 36 66 56;
+  --primary-foreground: 250 249 245;
 
-  --secondary: 245 242 237;
-  --secondary-foreground: 41 37 36;
+  --secondary: 240 237 230;
+  --secondary-foreground: 45 50 48;
 
-  --muted: 245 242 237;
-  --muted-foreground: 120 113 108;
+  --muted: 240 237 230;
+  --muted-foreground: 110 112 106;
 
-  --accent: 245 242 237;
-  --accent-foreground: 41 37 36;
+  --accent: 233 240 236;
+  --accent-foreground: 36 66 56;
 
-  --destructive: 224 109 83;
+  --destructive: 196 98 74;
   --destructive-foreground: 255 255 255;
 
-  --border: 231 226 217;
-  --input: 231 226 217;
-  --ring: 120 113 108;
+  --border: 228 223 213;
+  --input: 228 223 213;
+  --ring: 59 122 102;
+
+  /* SRS recall rating tokens */
+  --recall-again: 196 98 74;
+  --recall-hard: 196 139 55;
+  --recall-good: 59 130 102;
+  --recall-easy: 72 115 156;
 
   /* Legacy variable mapping for full backwards compatibility */
   --color-background: var(--background);
@@ -64,33 +70,39 @@
 .dark {
   color-scheme: dark;
 
-  --background: 24 23 22;
-  --foreground: 234 228 220;
+  --background: 20 23 22;
+  --foreground: 230 226 218;
 
-  --card: 32 30 28;
-  --card-foreground: 234 228 220;
+  --card: 28 32 30;
+  --card-foreground: 230 226 218;
 
-  --popover: 32 30 28;
-  --popover-foreground: 234 228 220;
+  --popover: 28 32 30;
+  --popover-foreground: 230 226 218;
 
-  --primary: 234 228 220;
-  --primary-foreground: 24 23 22;
+  --primary: 116 178 154;
+  --primary-foreground: 20 23 22;
 
-  --secondary: 44 41 38;
-  --secondary-foreground: 234 228 220;
+  --secondary: 38 43 41;
+  --secondary-foreground: 230 226 218;
 
-  --muted: 44 41 38;
-  --muted-foreground: 168 162 158;
+  --muted: 38 43 41;
+  --muted-foreground: 148 152 146;
 
-  --accent: 44 41 38;
-  --accent-foreground: 234 228 220;
+  --accent: 36 48 43;
+  --accent-foreground: 167 212 195;
 
-  --destructive: 239 104 80;
-  --destructive-foreground: 255 255 255;
+  --destructive: 212 114 90;
+  --destructive-foreground: 20 23 22;
 
-  --border: 54 50 46;
-  --input: 54 50 46;
-  --ring: 168 162 158;
+  --border: 46 52 49;
+  --input: 46 52 49;
+  --ring: 116 178 154;
+
+  /* SRS recall rating tokens */
+  --recall-again: 212 114 90;
+  --recall-hard: 218 160 84;
+  --recall-good: 116 178 154;
+  --recall-easy: 134 175 212;
 
   /* Legacy variable mapping for full backwards compatibility */
   --color-background: var(--background);

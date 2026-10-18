@@ -22,12 +22,17 @@ const badgeVariants = cva(
         B2: 'bg-blue-600/15 text-blue-700 dark:text-blue-300 border border-blue-600/30',
         C1: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30',
         C2: 'bg-emerald-700/20 text-emerald-800 dark:text-emerald-200 border border-emerald-600/40',
-        // Learning Statuses
-        New: 'bg-surface-200/70 text-surface-700 dark:bg-surface-800 dark:text-surface-300 border border-surface-300/30',
-        Learning: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20',
-        Familiar: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20',
-        Strong: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20',
-        Mastered: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20',
+        // Learning Statuses — Organic Maturation Progression
+        New: 'bg-stone-500/10 text-stone-600 dark:text-stone-300 border border-stone-500/20',
+        Learning: 'bg-amber-500/12 text-amber-800 dark:text-amber-300 border border-amber-500/25',
+        Familiar: 'bg-teal-600/12 text-teal-800 dark:text-teal-300 border border-teal-600/25',
+        Strong: 'bg-emerald-600/12 text-emerald-800 dark:text-emerald-300 border border-emerald-600/25',
+        Mastered: 'bg-indigo-600/12 text-indigo-800 dark:text-indigo-300 border border-indigo-600/25',
+        // Psychological Recall Variants
+        again: 'bg-recall-again/12 text-recall-again border border-recall-again/25',
+        hard: 'bg-recall-hard/12 text-recall-hard border border-recall-hard/25',
+        good: 'bg-recall-good/12 text-recall-good border border-recall-good/25',
+        easy: 'bg-recall-easy/12 text-recall-easy border border-recall-easy/25',
       },
     },
     defaultVariants: {

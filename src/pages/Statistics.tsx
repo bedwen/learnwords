@@ -55,10 +55,10 @@ export function Statistics() {
 
   const getRatingBadgeVariant = (rating: string) => {
     switch (rating) {
-      case 'again': return 'destructive';
-      case 'hard': return 'Strong';
-      case 'good': return 'Mastered';
-      case 'easy': return 'Familiar';
+      case 'again': return 'again';
+      case 'hard': return 'hard';
+      case 'good': return 'good';
+      case 'easy': return 'easy';
       default: return 'secondary';
     }
   };
@@ -192,11 +192,11 @@ export function Statistics() {
           </CardHeader>
           <CardContent className="space-y-4">
             {[
-              { label: 'New', val: 0, color: 'bg-muted-foreground' },
-              { label: 'Learning', val: 1, color: 'bg-purple-500' },
-              { label: 'Familiar', val: 2, color: 'bg-blue-500' },
-              { label: 'Strong', val: 3, color: 'bg-amber-500' },
-              { label: 'Mastered', val: 4, color: 'bg-emerald-500' },
+              { label: 'New', val: 0, color: 'bg-stone-400' },
+              { label: 'Learning', val: 1, color: 'bg-amber-500' },
+              { label: 'Familiar', val: 2, color: 'bg-teal-600' },
+              { label: 'Strong', val: 3, color: 'bg-emerald-600' },
+              { label: 'Mastered', val: 4, color: 'bg-indigo-600' },
             ].map((m) => {
               const stat = stats.masteryDistribution.find((d) => d.mastery === m.val);
               const count = stat ? stat.count : 0;

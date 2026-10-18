@@ -87,7 +87,7 @@ function AppContent() {
 
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-150',
+      'flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-150',
       isActive
         ? 'bg-secondary text-foreground font-semibold shadow-2xs'
         : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'

@@ -146,7 +146,7 @@ export function SentencePracticeView({
     return (
       <div className="py-20 flex flex-col items-center justify-center text-center max-w-lg mx-auto w-full">
         <Card className="w-full border-border p-8 space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-xs">
+          <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center shadow-xs">
             <CheckCircle2 className="h-8 w-8" />
           </div>
 
@@ -228,7 +228,7 @@ export function SentencePracticeView({
       </div>
 
       {/* Main Prompt Card */}
-      <Card className="w-full border-border bg-card p-5 sm:p-7 space-y-5 shadow-sm rounded-2xl">
+      <Card className="w-full border-border bg-card p-5 sm:p-7 space-y-5 shadow-sm rounded-3xl">
         {/* Card Header */}
         <div className="flex items-center justify-between text-xs text-muted-foreground border-b border-border/60 pb-3">
           <span className="truncate max-w-[200px]">{getWordFolderLabels(currentWord)}</span>
@@ -255,7 +255,7 @@ export function SentencePracticeView({
             </div>
           </div>
 
-          <p className="text-lg sm:text-2xl font-serif md:font-sans font-medium text-foreground leading-relaxed">
+          <p className="text-lg sm:text-2xl font-serif font-medium text-foreground leading-relaxed">
             "{promptSentence}"
           </p>
         </div>
@@ -291,7 +291,7 @@ export function SentencePracticeView({
               <Button
                 variant="primary"
                 onClick={handleReveal}
-                className="w-full sm:w-auto px-6 font-semibold shadow-xs gap-1.5 ml-auto"
+                className="w-full sm:w-auto rounded-full px-6 font-semibold shadow-xs gap-1.5 ml-auto"
               >
                 <span>Check Answer</span>
                 <ArrowRight className="h-4 w-4" />
@@ -304,8 +304,8 @@ export function SentencePracticeView({
             {/* Comparison Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
               {/* Canonical Reference */}
-              <div className="p-3.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 space-y-1.5">
-                <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-300 text-xs font-semibold">
+              <div className="p-3.5 rounded-xl bg-recall-good/10 border border-recall-good/30 space-y-1.5">
+                <div className="flex items-center gap-1 text-recall-good text-xs font-semibold">
                   <Check className="h-3.5 w-3.5" />
                   <span>Reference Answer</span>
                 </div>
@@ -352,7 +352,7 @@ export function SentencePracticeView({
                   type="button"
                   disabled={submitting}
                   onClick={() => handleRatingSubmit('again')}
-                  className="flex flex-col items-center justify-center min-h-[46px] py-1.5 px-2 rounded-xl font-medium text-xs transition-all bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 hover:bg-rose-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="flex flex-col items-center justify-center min-h-[46px] py-1.5 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-again/10 text-recall-again border border-recall-again/25 hover:bg-recall-again/20 active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   <span className="font-bold text-sm">Again</span>
                   <span className="text-2xs opacity-70 mt-0.5">[1]</span>
@@ -362,7 +362,7 @@ export function SentencePracticeView({
                   type="button"
                   disabled={submitting}
                   onClick={() => handleRatingSubmit('hard')}
-                  className="flex flex-col items-center justify-center min-h-[46px] py-1.5 px-2 rounded-xl font-medium text-xs transition-all bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="flex flex-col items-center justify-center min-h-[46px] py-1.5 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-hard/10 text-recall-hard border border-recall-hard/25 hover:bg-recall-hard/20 active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   <span className="font-bold text-sm">Hard</span>
                   <span className="text-2xs opacity-70 mt-0.5">[2]</span>
@@ -372,7 +372,7 @@ export function SentencePracticeView({
                   type="button"
                   disabled={submitting}
                   onClick={() => handleRatingSubmit('good')}
-                  className="flex flex-col items-center justify-center min-h-[46px] py-1.5 px-2 rounded-xl font-medium text-xs transition-all bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border border-emerald-600/20 hover:bg-emerald-600/20 active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="flex flex-col items-center justify-center min-h-[46px] py-1.5 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-good/12 text-recall-good border border-recall-good/30 hover:bg-recall-good/22 active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   <span className="font-bold text-sm">Good</span>
                   <span className="text-2xs opacity-70 mt-0.5">[3]</span>
@@ -382,7 +382,7 @@ export function SentencePracticeView({
                   type="button"
                   disabled={submitting}
                   onClick={() => handleRatingSubmit('easy')}
-                  className="flex flex-col items-center justify-center min-h-[46px] py-1.5 px-2 rounded-xl font-medium text-xs transition-all bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 hover:bg-sky-500/20 active:scale-95 cursor-pointer disabled:opacity-50"
+                  className="flex flex-col items-center justify-center min-h-[46px] py-1.5 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-easy/10 text-recall-easy border border-recall-easy/25 hover:bg-recall-easy/20 active:scale-95 cursor-pointer disabled:opacity-50"
                 >
                   <span className="font-bold text-sm">Easy</span>
                   <span className="text-2xs opacity-70 mt-0.5">[4]</span>

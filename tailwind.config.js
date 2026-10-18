@@ -72,6 +72,12 @@ export default {
           900: 'rgb(var(--color-surface-900) / <alpha-value>)',
           950: 'rgb(var(--color-surface-950) / <alpha-value>)',
         },
+        recall: {
+          again: 'rgb(var(--recall-again) / <alpha-value>)',
+          hard: 'rgb(var(--recall-hard) / <alpha-value>)',
+          good: 'rgb(var(--recall-good) / <alpha-value>)',
+          easy: 'rgb(var(--recall-easy) / <alpha-value>)',
+        },
       },
     },
   },
