@@ -131,9 +131,10 @@ export class FolderService {
    */
   static deleteFolder(id: string): boolean {
     const db = getDatabase();
+    const now = new Date().toISOString();
     let changes = 0;
     const tx = db.transaction(() => {
-      const result = db.prepare(`UPDATE folders SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`).run(id);
+      const result = db.prepare(`UPDATE folders SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now, now, id);
       changes = result.changes;
       if (changes > 0) {
         db.prepare('DELETE FROM word_folders WHERE folder_id = ?').run(id);

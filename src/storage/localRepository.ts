@@ -25,7 +25,7 @@ import {
   LocalWordFolderRecord,
   LocalReviewHistoryRecord,
 } from './indexedDb';
-import { executeSmartMerge } from './smartMerge';
+import { executeSmartMerge, normalizeTimestamp } from './smartMerge';
 
 export const CEFR_LEVELS: CEFRLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
@@ -507,8 +507,8 @@ export class LocalRepository {
     }
 
     trashWords.sort((a, b) => {
-      const timeA = typeof a.deleted_at === 'number' ? a.deleted_at : new Date(a.deleted_at as any).getTime() || 0;
-      const timeB = typeof b.deleted_at === 'number' ? b.deleted_at : new Date(b.deleted_at as any).getTime() || 0;
+      const timeA = normalizeTimestamp(a.deleted_at);
+      const timeB = normalizeTimestamp(b.deleted_at);
       return timeB - timeA;
     });
 

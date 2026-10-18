@@ -241,14 +241,15 @@ export class WordService {
   }
 
   /**
-   * Soft delete a word: marks deleted_at = datetime('now'), updated_at = datetime('now')
+   * Soft delete a word: marks deleted_at and updated_at with UTC ISO timestamp
    * and unlinks junction records in word_folders.
    */
   static deleteWord(id: string): boolean {
     const db = getDatabase();
+    const now = new Date().toISOString();
     let changes = 0;
     const tx = db.transaction(() => {
-      const result = db.prepare(`UPDATE words SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND deleted_at IS NULL`).run(id);
+      const result = db.prepare(`UPDATE words SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now, now, id);
       changes = result.changes;
       if (changes > 0) {
         db.prepare('DELETE FROM word_folders WHERE word_id = ?').run(id);
@@ -303,10 +304,16 @@ export class WordService {
     const rows = db.prepare(query).all(...params) as any[];
     const folderMap = FolderService.getWordFolderIdsMap(rows.map((r) => r.id));
 
-    return rows.map((row) => ({
+    const result = rows.map((row) => ({
       ...this.mapRowToWordWithState(row),
       folderIds: folderMap.get(row.id) || [],
     }));
+
+    return result.sort((a, b) => {
+      const timeA = normalizeTimestamp(a.deleted_at);
+      const timeB = normalizeTimestamp(b.deleted_at);
+      return timeB - timeA;
+    });
   }
 
   /**
@@ -324,7 +331,8 @@ export class WordService {
    */
   static restoreWord(id: string): boolean {
     const db = getDatabase();
-    const result = db.prepare('UPDATE words SET deleted_at = NULL, updated_at = datetime(\'now\') WHERE id = ? AND deleted_at IS NOT NULL').run(id);
+    const now = new Date().toISOString();
+    const result = db.prepare(`UPDATE words SET deleted_at = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NOT NULL`).run(now, id);
     return result.changes > 0;
   }
 
@@ -347,12 +355,13 @@ export class WordService {
     if (ids.length === 0) return 0;
 
     const db = getDatabase();
-    const stmt = db.prepare('UPDATE words SET deleted_at = NULL, updated_at = datetime(\'now\') WHERE id = ? AND deleted_at IS NOT NULL');
+    const now = new Date().toISOString();
+    const stmt = db.prepare(`UPDATE words SET deleted_at = NULL, updated_at = ? WHERE id = ? AND deleted_at IS NOT NULL`);
 
     const transaction = db.transaction((idList: string[]) => {
       let count = 0;
       for (const id of idList) {
-        count += stmt.run(id).changes;
+        count += stmt.run(now, id).changes;
       }
       return count;
     });

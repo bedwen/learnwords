@@ -30,11 +30,21 @@ export function generateSyncId(): string {
 
 /**
  * Normalizes timestamps to Unix epoch milliseconds.
+ * Formats SQLite UTC strings without timezone indicators to ISO UTC so JavaScript
+ * parses them reliably regardless of host machine timezone offset.
  */
 export function normalizeTimestamp(val: any): number {
   if (typeof val === 'number' && !isNaN(val)) return val;
   if (typeof val === 'string') {
-    const parsed = new Date(val).getTime();
+    let s = val.trim();
+    if (!s) return 0;
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(s)) {
+      s = s.replace(' ', 'T') + 'Z';
+    } else if (/^\d+$/.test(s)) {
+      const num = Number(s);
+      if (!isNaN(num)) return num;
+    }
+    const parsed = new Date(s).getTime();
     if (!isNaN(parsed)) return parsed;
   }
   return 0;

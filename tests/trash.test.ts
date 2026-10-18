@@ -109,6 +109,23 @@ describe('Word Trash Bin Feature (D033)', () => {
       expect(levelC1.map((w) => w.id)).toEqual(expect.arrayContaining([w2.id, w3.id]));
     });
 
+    it('sorts trash words chronologically descending even with mixed timestamp representations', () => {
+      const w1 = WordService.createWord({ word: 'first', meaning: 'm1', level: 'A1' });
+      const w2 = WordService.createWord({ word: 'second', meaning: 'm2', level: 'A2' });
+      const w3 = WordService.createWord({ word: 'third', meaning: 'm3', level: 'B1' });
+
+      // Simulate mixed timestamp representations in DB
+      db().prepare('UPDATE words SET deleted_at = ? WHERE id = ?').run('2026-10-18 10:00:00', w1.id);
+      db().prepare('UPDATE words SET deleted_at = ? WHERE id = ?').run(Date.UTC(2026, 9, 18, 12, 0, 0), w2.id);
+      db().prepare('UPDATE words SET deleted_at = ? WHERE id = ?').run('2026-10-18T11:00:00.000Z', w3.id);
+
+      const trash = WordService.getTrashWords();
+      expect(trash).toHaveLength(3);
+      expect(trash[0].id).toBe(w2.id); // 12:00:00 UTC (newest)
+      expect(trash[1].id).toBe(w3.id); // 11:00:00 UTC
+      expect(trash[2].id).toBe(w1.id); // 10:00:00 UTC (oldest)
+    });
+
     it('restores a word safely and preserves 100% of learning_states (SRS progress invariance)', () => {
       const word = WordService.createWord({ word: 'persist', meaning: 'continue firmly', level: 'B1' });
 

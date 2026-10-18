@@ -5,6 +5,7 @@ import {
   mergeReviews,
   harmonizeWordLearningState,
   executeSmartMerge,
+  normalizeTimestamp,
 } from '../src/storage/smartMerge';
 import {
   LocalRepository,
@@ -395,6 +396,42 @@ describe('Smart Merge Engine (Pure Functions)', () => {
       expect(state.interval_step).toBe(3);
       expect(state.mastery).toBe(3);
       expect(state.last_reviewed).toBe('2026-01-11T10:00:00.000Z');
+    });
+  });
+
+  describe('normalizeTimestamp', () => {
+    it('parses SQLite UTC strings identically to their ISO UTC equivalent', () => {
+      const sqliteUtc = '2026-10-18 12:00:00';
+      const isoUtc = '2026-10-18T12:00:00.000Z';
+      const sqliteEpoch = normalizeTimestamp(sqliteUtc);
+      const isoEpoch = normalizeTimestamp(isoUtc);
+
+      expect(sqliteEpoch).toBe(isoEpoch);
+      expect(sqliteEpoch).toBe(Date.UTC(2026, 9, 18, 12, 0, 0));
+    });
+
+    it('parses SQLite UTC strings with fractional seconds identically to ISO UTC', () => {
+      const sqliteUtcMs = '2026-10-18 12:00:00.500';
+      const isoUtcMs = '2026-10-18T12:00:00.500Z';
+      expect(normalizeTimestamp(sqliteUtcMs)).toBe(normalizeTimestamp(isoUtcMs));
+      expect(normalizeTimestamp(sqliteUtcMs)).toBe(Date.UTC(2026, 9, 18, 12, 0, 0, 500));
+    });
+
+    it('correctly handles integer epoch milliseconds', () => {
+      const epoch = 1771329600000;
+      expect(normalizeTimestamp(epoch)).toBe(epoch);
+      expect(normalizeTimestamp(0)).toBe(0);
+    });
+
+    it('correctly handles invalid values and edge cases', () => {
+      expect(normalizeTimestamp(null)).toBe(0);
+      expect(normalizeTimestamp(undefined)).toBe(0);
+      expect(normalizeTimestamp('')).toBe(0);
+      expect(normalizeTimestamp('   ')).toBe(0);
+      expect(normalizeTimestamp('not-a-timestamp')).toBe(0);
+      expect(normalizeTimestamp(NaN)).toBe(0);
+      expect(normalizeTimestamp({})).toBe(0);
+      expect(normalizeTimestamp([])).toBe(0);
     });
   });
 });
