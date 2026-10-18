@@ -218,6 +218,188 @@ describe('LAN Peer Sync & Smart Merge', () => {
       const rawRow = db.prepare('SELECT deleted_at FROM words WHERE id = ?').get(word.id) as any;
       expect(rawRow.deleted_at).not.toBeNull();
     });
+
+    it('merges an incoming bundle with orphaned word_folders without FOREIGN KEY crash and omits orphaned junctions', () => {
+      const folder = FolderService.createFolder('Science', '#10b981');
+      const word = WordService.createWord({
+        word: 'hypothesis',
+        meaning: 'proposed explanation',
+        level: 'B2',
+      });
+
+      const incomingBundle: SyncBundle = {
+        version: 1,
+        deviceId: 'remote-mobile',
+        exportedAt: new Date().toISOString(),
+        words: [],
+        folders: [],
+        word_folders: [
+          // 1. Valid link
+          { word_id: word.id, folder_id: folder.id },
+          // 2. Orphaned word_id (non-existent word)
+          { word_id: 'non-existent-word-id', folder_id: folder.id },
+          // 3. Orphaned folder_id (non-existent folder)
+          { word_id: word.id, folder_id: 'non-existent-folder-id' },
+          // 4. Both non-existent
+          { word_id: 'ghost-word', folder_id: 'ghost-folder' },
+        ],
+        review_history: [],
+      };
+
+      const { result, serverBundle } = SyncService.mergeSyncBundle(incomingBundle);
+      expect(result.success).toBe(true);
+
+      // Check word_folders in SQLite
+      const junctions = db.prepare('SELECT word_id, folder_id FROM word_folders').all() as any[];
+      expect(junctions).toHaveLength(1);
+      expect(junctions[0].word_id).toBe(word.id);
+      expect(junctions[0].folder_id).toBe(folder.id);
+
+      // Check serverBundle export
+      expect(serverBundle.word_folders).toHaveLength(1);
+      expect(serverBundle.word_folders[0]).toEqual({
+        word_id: word.id,
+        folder_id: folder.id,
+      });
+    });
+
+    it('merges an incoming bundle with orphaned review_history without FOREIGN KEY crash and omits orphaned reviews', () => {
+      const word = WordService.createWord({
+        word: 'experiment',
+        meaning: 'scientific procedure',
+        level: 'B1',
+      });
+
+      const incomingBundle: SyncBundle = {
+        version: 1,
+        deviceId: 'remote-mobile',
+        exportedAt: new Date().toISOString(),
+        words: [],
+        folders: [],
+        word_folders: [],
+        review_history: [
+          // Valid review
+          {
+            id: 'rev-valid',
+            sync_id: 'sync-rev-valid',
+            word_id: word.id,
+            rating: 'good',
+            mastery_before: 0,
+            mastery_after: 1,
+            interval_step_before: 0,
+            interval_step_after: 1,
+            reviewed_at: new Date().toISOString(),
+          },
+          // Orphaned review (word_id does not exist)
+          {
+            id: 'rev-orphan',
+            sync_id: 'sync-rev-orphan',
+            word_id: 'ghost-word-id-12345',
+            rating: 'easy',
+            mastery_before: 0,
+            mastery_after: 2,
+            interval_step_before: 0,
+            interval_step_after: 2,
+            reviewed_at: new Date().toISOString(),
+          },
+        ],
+      };
+
+      const { result, serverBundle } = SyncService.mergeSyncBundle(incomingBundle);
+      expect(result.success).toBe(true);
+
+      // Check reviews in SQLite
+      const reviews = db.prepare('SELECT id, word_id FROM review_history').all() as any[];
+      expect(reviews).toHaveLength(1);
+      expect(reviews[0].word_id).toBe(word.id);
+
+      // Check serverBundle export
+      expect(serverBundle.review_history).toHaveLength(1);
+      expect(serverBundle.review_history[0].word_id).toBe(word.id);
+    });
+
+    it('does not re-link words to a deleted folder and cleans up existing associations', () => {
+      const folder = FolderService.createFolder('Temporary Folder', '#ef4444');
+      const word = WordService.createWord({
+        word: 'transient',
+        meaning: 'lasting only for a short time',
+        level: 'C1',
+        folderIds: [folder.id],
+      });
+
+      // Folder is deleted on server
+      FolderService.deleteFolder(folder.id);
+
+      // Incoming bundle has the word_folders link from before the folder was deleted
+      const incomingBundle: SyncBundle = {
+        version: 1,
+        deviceId: 'remote-mobile',
+        exportedAt: new Date().toISOString(),
+        words: [],
+        folders: [],
+        word_folders: [
+          { word_id: word.id, folder_id: folder.id },
+        ],
+        review_history: [],
+      };
+
+      const { result, serverBundle } = SyncService.mergeSyncBundle(incomingBundle);
+      expect(result.success).toBe(true);
+
+      // SQLite must NOT have the word_folders link
+      const junctions = db.prepare('SELECT * FROM word_folders WHERE folder_id = ?').all(folder.id);
+      expect(junctions).toHaveLength(0);
+
+      // Server bundle export must NOT contain junction pointing to deleted folder
+      expect(serverBundle.word_folders.some((wf) => wf.folder_id === folder.id)).toBe(false);
+    });
+
+    it('cleans up word_folders when a folder is soft-deleted via incoming bundle', () => {
+      const folder = FolderService.createFolder('Archive', '#6b7280');
+      const word = WordService.createWord({
+        word: 'relic',
+        meaning: 'an object surviving from an earlier time',
+        level: 'B2',
+        folderIds: [folder.id],
+      });
+
+      // Verify junction exists before sync
+      const initialJunctions = db.prepare('SELECT * FROM word_folders WHERE folder_id = ?').all(folder.id);
+      expect(initialJunctions).toHaveLength(1);
+
+      // Incoming bundle marks the folder as deleted
+      const incomingBundle: SyncBundle = {
+        version: 1,
+        deviceId: 'remote-mobile',
+        exportedAt: new Date().toISOString(),
+        words: [],
+        folders: [
+          {
+            id: folder.id,
+            sync_id: folder.sync_id,
+            name: folder.name,
+            color: folder.color,
+            wordCount: 0,
+            created_at: folder.created_at,
+            updated_at: Date.now() + 5000,
+            deleted_at: Date.now() + 5000,
+          },
+        ],
+        word_folders: [
+          { word_id: word.id, folder_id: folder.id },
+        ],
+        review_history: [],
+      };
+
+      const { result, serverBundle } = SyncService.mergeSyncBundle(incomingBundle);
+      expect(result.success).toBe(true);
+      expect(result.foldersDeleted).toBe(1);
+
+      // Verify junction was deleted from SQLite
+      const afterJunctions = db.prepare('SELECT * FROM word_folders WHERE folder_id = ?').all(folder.id);
+      expect(afterJunctions).toHaveLength(0);
+      expect(serverBundle.word_folders).toHaveLength(0);
+    });
   });
 
   describe('HTTP Sync Routes (/api/sync)', () => {
@@ -361,6 +543,65 @@ describe('LAN Peer Sync & Smart Merge', () => {
       const serverWordNames = finalServerWords.map((w) => w.word).sort();
       expect(clientWordNames).toEqual(['client_vocab', 'server_vocab']);
       expect(serverWordNames).toEqual(['client_vocab', 'server_vocab']);
+    });
+
+    it('filters orphaned word_folders and reviews on client IndexedDB smart merge', async () => {
+      const testFactory = createInMemoryIDBFactory();
+      const adapter = new IndexedDbAdapter(`test_orphan_${generateId()}`, 1, testFactory);
+      const clientRepo = new LocalRepository(adapter);
+
+      const word = await clientRepo.createWord({
+        word: 'catalyst',
+        meaning: 'substance that increases rate of reaction',
+        level: 'C1',
+      });
+      const folder = await clientRepo.createFolder('Chemistry', '#06b6d4');
+
+      const incomingBundle: SyncBundle = {
+        version: 1,
+        deviceId: 'server-desktop',
+        exportedAt: new Date().toISOString(),
+        words: [],
+        folders: [],
+        word_folders: [
+          { word_id: word.id, folder_id: folder.id },
+          { word_id: 'unknown-word', folder_id: folder.id },
+          { word_id: word.id, folder_id: 'unknown-folder' },
+        ],
+        review_history: [
+          {
+            id: 'rev-client-valid',
+            sync_id: 'sync-rev-c-valid',
+            word_id: word.id,
+            rating: 'good',
+            mastery_before: 0,
+            mastery_after: 1,
+            interval_step_before: 0,
+            interval_step_after: 1,
+            reviewed_at: new Date().toISOString(),
+          },
+          {
+            id: 'rev-client-orphan',
+            sync_id: 'sync-rev-c-orphan',
+            word_id: 'unknown-word',
+            rating: 'again',
+            mastery_before: 0,
+            mastery_after: 0,
+            interval_step_before: 0,
+            interval_step_after: 0,
+            reviewed_at: new Date().toISOString(),
+          },
+        ],
+      };
+
+      const mergeResult = await clientRepo.mergeSyncBundle(incomingBundle);
+      expect(mergeResult.success).toBe(true);
+
+      const savedWordFolders = await adapter.getAll('word_folders');
+      expect(savedWordFolders).toHaveLength(1);
+
+      const savedReviews = await adapter.getAll('review_history');
+      expect(savedReviews).toHaveLength(1);
     });
   });
 });

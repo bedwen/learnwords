@@ -447,9 +447,25 @@ export async function executeSmartMerge(
     }
   }
 
-  // 7. Harmonize learning states for all words
+  // 7. Defensive filtering for foreign keys & soft-deleted folders
+  const validWordIds = new Set<string>(wordMerge.merged.map((w) => w.id));
+  const validFolderIds = new Set<string>(folderMerge.merged.map((f) => f.id));
+  const deletedFolderIds = new Set<string>(
+    folderMerge.merged.filter((f) => f.deleted_at != null).map((f) => f.id)
+  );
+
+  const filteredWordFolders = mergedWordFolders.filter(
+    (wf) =>
+      validWordIds.has(wf.word_id) &&
+      validFolderIds.has(wf.folder_id) &&
+      !deletedFolderIds.has(wf.folder_id)
+  );
+
+  const filteredReviews = reviewMerge.merged.filter((r) => validWordIds.has(r.word_id));
+
+  // 8. Harmonize learning states for all words
   const reviewsByWord = new Map<string, LocalReviewHistoryRecord[]>();
-  for (const rev of reviewMerge.merged) {
+  for (const rev of filteredReviews) {
     const list = reviewsByWord.get(rev.word_id) || [];
     list.push(rev);
     reviewsByWord.set(rev.word_id, list);
@@ -471,12 +487,33 @@ export async function executeSmartMerge(
     harmonizedStates.push(state);
   }
 
-  // 8. Commit changes atomically into IndexedDB
+  // Ensure stale word_folders and orphaned reviews are removed from IndexedDB
+  const validWfKeySet = new Set(
+    filteredWordFolders.map((wf) => `${wf.word_id}_${wf.folder_id}`)
+  );
+  const staleWordFolderDeletions = localWordFolders
+    .filter((wf) => !validWfKeySet.has(`${wf.word_id}_${wf.folder_id}`))
+    .map((wf) => adapter.delete('word_folders', wf.id || `${wf.word_id}_${wf.folder_id}`));
+
+  const staleReviewDeletions = localReviews
+    .filter((r) => !validWordIds.has(r.word_id))
+    .map((r) => adapter.delete('review_history', r.id));
+
+  // 9. Commit changes atomically into IndexedDB
   await Promise.all([
+    ...staleWordFolderDeletions,
+    ...staleReviewDeletions,
     adapter.putMany('words', wordMerge.merged),
     adapter.putMany('folders', folderMerge.merged),
-    adapter.putMany('review_history', reviewMerge.merged),
-    adapter.putMany('word_folders', mergedWordFolders),
+    adapter.putMany('review_history', filteredReviews),
+    adapter.putMany(
+      'word_folders',
+      filteredWordFolders.map((wf) => ({
+        id: wf.id || `${wf.word_id}_${wf.folder_id}`,
+        word_id: wf.word_id,
+        folder_id: wf.folder_id,
+      }))
+    ),
     adapter.putMany('learning_states', harmonizedStates),
   ]);
 
