@@ -14,6 +14,7 @@ import { WordWithState, ReviewRating, Folder, FolderListResponse, StudyMode } fr
 import { getStudyQueue, submitReview } from '../api/study';
 import { getFolders } from '../api/folders';
 import { getCached, setCached } from '../api/cache';
+import { useToast } from '../context/ToastContext';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -25,6 +26,7 @@ interface StudyProps {
 
 export function Study({ folderId }: StudyProps = {}) {
   const navigate = useNavigate();
+  const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [queue, setQueue] = useState<WordWithState[]>([]);
   const [loading, setLoading] = useState(true);
@@ -127,11 +129,12 @@ export function Study({ folderId }: StudyProps = {}) {
         await submitReview(currentWord.id, rating);
       } catch (err) {
         console.error('Failed to submit review:', err);
+        toast.error('Failed to submit review. Please try again.');
       } finally {
         setSubmitting(false);
       }
     },
-    [queue, submitting]
+    [queue, submitting, toast]
   );
 
   useEffect(() => {

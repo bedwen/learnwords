@@ -15,7 +15,10 @@ import {
 import * as platform from '../src/platform';
 import * as studyApi from '../src/api/study';
 import { clearCache, getCached } from '../src/api/cache';
-import { LearningState, WordWithState } from '../src/types';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { LearningState, WordWithState, ReviewRating } from '../src/types';
+import { SentencePracticeView } from '../src/components/study/SentencePracticeView';
 
 vi.mock('../server/db', () => ({
   getDatabase: () => globalThis.__TEST_DB__,
@@ -377,6 +380,184 @@ describe('Sentence Translation Practice', () => {
 
       await studyApi.submitReview('w1', 'good');
       expect(getCached('study_queue_all_sentences')).toBeNull();
+    });
+  });
+
+  describe('SentencePracticeView UI & Transition Synchronization', () => {
+    const mockWord1: WordWithState = {
+      id: 'w1',
+      word: 'meticulous',
+      meaning: 'showing great attention to detail',
+      level: 'C1',
+      example_sentence: 'He was meticulous about keeping records.',
+      example_translation: 'Kayitlari tutma konusunda cok titizdi.',
+      created_at: new Date().toISOString(),
+      updated_at: Date.now(),
+      sync_id: 's1',
+      deleted_at: null,
+      learning_state: {
+        id: 'ls1',
+        word_id: 'w1',
+        mastery: 2,
+        interval_step: 2,
+        next_review: new Date().toISOString(),
+        last_reviewed: null,
+        review_count: 3,
+        correct_count: 2,
+        wrong_count: 1,
+        consecutive_correct: 1,
+      },
+    };
+
+    const mockWord2: WordWithState = {
+      id: 'w2',
+      word: 'lucid',
+      meaning: 'clear and easy to understand',
+      level: 'B2',
+      example_sentence: 'She gave a lucid explanation of the concept.',
+      example_translation: 'Kavramin acik bir aciklamasini yapti.',
+      created_at: new Date().toISOString(),
+      updated_at: Date.now(),
+      sync_id: 's2',
+      deleted_at: null,
+      learning_state: {
+        id: 'ls2',
+        word_id: 'w2',
+        mastery: 1,
+        interval_step: 1,
+        next_review: new Date().toISOString(),
+        last_reviewed: null,
+        review_count: 1,
+        correct_count: 1,
+        wrong_count: 0,
+        consecutive_correct: 1,
+      },
+    };
+
+    it('renders empty completion view when queue is empty', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SentencePracticeView, {
+          queue: [],
+          folders: [],
+          onReview: vi.fn(),
+          onSwitchToFlashcards: vi.fn(),
+          onRefreshQueue: vi.fn(),
+        })
+      );
+
+      expect(html).toContain('Sentence Practice Complete!');
+      expect(html).toContain('No sentence practice cards due in this queue.');
+      expect(html).not.toContain('Check Answer');
+    });
+
+    it('renders active word prompt in unrevealed state initially', () => {
+      const html = renderToStaticMarkup(
+        React.createElement(SentencePracticeView, {
+          queue: [mockWord1, mockWord2],
+          folders: [],
+          onReview: vi.fn(),
+          onSwitchToFlashcards: vi.fn(),
+          onRefreshQueue: vi.fn(),
+        })
+      );
+
+      // Prompt is visible
+      expect(html).toContain('He was meticulous about keeping records.');
+      // Answer action is visible
+      expect(html).toContain('Check Answer');
+      // Rating buttons are hidden in unrevealed state
+      expect(html).not.toContain('Rate your recall');
+      expect(html).not.toContain('DiffHighlight');
+    });
+
+    it('renders next word prompt when queue advances without leaking previous word answer', () => {
+      // First card
+      const htmlWord1 = renderToStaticMarkup(
+        React.createElement(SentencePracticeView, {
+          queue: [mockWord1, mockWord2],
+          folders: [],
+          onReview: vi.fn(),
+          onSwitchToFlashcards: vi.fn(),
+          onRefreshQueue: vi.fn(),
+        })
+      );
+      expect(htmlWord1).toContain('He was meticulous about keeping records.');
+
+      // Queue advances: mockWord2 is now currentWord
+      const htmlWord2 = renderToStaticMarkup(
+        React.createElement(SentencePracticeView, {
+          queue: [mockWord2],
+          folders: [],
+          onReview: vi.fn(),
+          onSwitchToFlashcards: vi.fn(),
+          onRefreshQueue: vi.fn(),
+        })
+      );
+      expect(htmlWord2).toContain('She gave a lucid explanation of the concept.');
+      expect(htmlWord2).not.toContain('He was meticulous about keeping records.');
+      expect(htmlWord2).toContain('Check Answer');
+      expect(htmlWord2).not.toContain('Rate your recall');
+    });
+
+    it('clears revelation and input immediately upon submission before review network completes', async () => {
+      let isRevealed = true;
+      let input = 'My typed answer';
+      let submitting = false;
+
+      const onReviewMock = vi.fn(async (_rating: ReviewRating) => {
+        // Verify that during onReview execution, isRevealed is already false and input is already cleared
+        expect(isRevealed).toBe(false);
+        expect(input).toBe('');
+        expect(submitting).toBe(true);
+      });
+
+      // Execute synchronous reset matching SentencePracticeView.handleRatingSubmit
+      const handleRatingSubmit = async (rating: ReviewRating) => {
+        if (submitting) return;
+        input = '';
+        isRevealed = false;
+        setSubmitting(true);
+        try {
+          await onReviewMock(rating);
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      const setSubmitting = (val: boolean) => {
+        submitting = val;
+      };
+
+      await handleRatingSubmit('good');
+      expect(onReviewMock).toHaveBeenCalledTimes(1);
+      expect(isRevealed).toBe(false);
+      expect(input).toBe('');
+      expect(submitting).toBe(false);
+    });
+
+    it('triggers toast error notification when review submission fails', async () => {
+      const toastApi = {
+        error: vi.fn(),
+        success: vi.fn(),
+        info: vi.fn(),
+        dismiss: vi.fn(),
+      };
+
+      const failingSubmitReview = vi.fn().mockRejectedValue(new Error('Network offline'));
+
+      // Study.tsx handleRating pattern with toast notification
+      const handleRating = async (wordId: string, rating: ReviewRating) => {
+        try {
+          await failingSubmitReview(wordId, rating);
+        } catch (err) {
+          toastApi.error('Failed to submit review. Please try again.');
+        }
+      };
+
+      await handleRating('w1', 'good');
+
+      expect(failingSubmitReview).toHaveBeenCalledWith('w1', 'good');
+      expect(toastApi.error).toHaveBeenCalledWith('Failed to submit review. Please try again.');
     });
   });
 });

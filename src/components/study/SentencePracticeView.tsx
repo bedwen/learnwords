@@ -37,9 +37,15 @@ export function SentencePracticeView({
   onRefreshQueue,
 }: SentencePracticeViewProps) {
   const [direction, setDirection] = useState<SentencePracticeDirection>(() => {
-    const saved = localStorage.getItem(DIRECTION_STORAGE_KEY);
-    if (saved === 'translation_to_sentence' || saved === 'sentence_to_translation') {
-      return saved;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem(DIRECTION_STORAGE_KEY);
+        if (saved === 'translation_to_sentence' || saved === 'sentence_to_translation') {
+          return saved;
+        }
+      }
+    } catch {
+      // Ignore storage access errors in restricted or test environments
     }
     return 'sentence_to_translation';
   });
@@ -51,6 +57,12 @@ export function SentencePracticeView({
 
   const currentWord = queue[0];
 
+  // Reset input and revelation state whenever the active card changes
+  useEffect(() => {
+    setIsRevealed(false);
+    setInput('');
+  }, [currentWord?.id]);
+
   // Focus input when moving to a new word or un-revealing
   useEffect(() => {
     if (!isRevealed && textareaRef.current) {
@@ -60,7 +72,13 @@ export function SentencePracticeView({
 
   const handleDirectionChange = (newDirection: SentencePracticeDirection) => {
     setDirection(newDirection);
-    localStorage.setItem(DIRECTION_STORAGE_KEY, newDirection);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(DIRECTION_STORAGE_KEY, newDirection);
+      }
+    } catch {
+      // Ignore storage access errors
+    }
   };
 
   const handleReveal = useCallback(() => {
@@ -71,11 +89,11 @@ export function SentencePracticeView({
   const handleRatingSubmit = useCallback(
     async (rating: ReviewRating) => {
       if (submitting || queue.length === 0) return;
+      setInput('');
+      setIsRevealed(false);
       setSubmitting(true);
       try {
         await onReview(rating);
-        setInput('');
-        setIsRevealed(false);
       } catch (err) {
         console.error('Failed to submit sentence review:', err);
       } finally {
