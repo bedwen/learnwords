@@ -494,6 +494,26 @@ describe('LAN Peer Sync & Smart Merge', () => {
       });
       expect(res.status).toBe(403);
     });
+    it('allows CORS requests from Capacitor Android/iOS origins (https://localhost, capacitor://localhost) and returns LAN info on /api/sync/info', async () => {
+      for (const origin of ['https://localhost', 'http://localhost', 'capacitor://localhost', 'ionic://localhost', 'http://my-pc.local:3001']) {
+        const healthRes = await fetch(`${baseUrl}/api/health`, {
+          headers: { Origin: origin },
+        });
+        expect(healthRes.status).toBe(200);
+        expect(healthRes.headers.get('access-control-allow-origin')).toBe(origin);
+        expect(await healthRes.json()).toEqual({ status: 'ok' });
+
+        const infoRes = await fetch(`${baseUrl}/api/sync/info`, {
+          headers: { Origin: origin },
+        });
+        expect(infoRes.status).toBe(200);
+        const body = await infoRes.json();
+        expect(body.status).toBe('ok');
+        expect(body.port).toBe(3001);
+        expect('lanIp' in body).toBe(true);
+        expect('peerUrl' in body).toBe(true);
+      }
+    });
   });
 
   describe('Bidirectional Exchange (IndexedDB <-> SQLite)', () => {
@@ -543,6 +563,49 @@ describe('LAN Peer Sync & Smart Merge', () => {
       const serverWordNames = finalServerWords.map((w) => w.word).sort();
       expect(clientWordNames).toEqual(['client_vocab', 'server_vocab']);
       expect(serverWordNames).toEqual(['client_vocab', 'server_vocab']);
+    });
+
+    it('propagates folder membership removals (word_folders) via LWW without resurrecting removed links', async () => {
+      const testFactory = createInMemoryIDBFactory();
+      const adapter = new IndexedDbAdapter(`test_wf_lww_${generateId()}`, 1, testFactory);
+      const clientRepo = new LocalRepository(adapter);
+
+      // 1. Desktop creates a folder and a word inside that folder
+      const folder = FolderService.createFolder('IELTS', '#f59e0b');
+      const word = WordService.createWord({
+        word: 'coherent',
+        meaning: 'logical and consistent',
+        level: 'C1',
+        folderIds: [folder.id],
+      });
+
+      // 2. Initial sync to Mobile
+      const initialServerBundle = SyncService.exportSyncBundle();
+      await clientRepo.mergeSyncBundle(initialServerBundle);
+
+      let mobileWords = await clientRepo.getWords({ folderId: folder.id });
+      expect(mobileWords).toHaveLength(1);
+
+      // 3. On Mobile, remove the word from the folder (slightly later timestamp)
+      await new Promise((r) => setTimeout(r, 15));
+      const mobileWord = (await clientRepo.getWords())[0];
+      await clientRepo.removeWordFromFolder(mobileWord.id, folder.id);
+
+      // Verify removed on Mobile
+      mobileWords = await clientRepo.getWords({ folderId: folder.id });
+      expect(mobileWords).toHaveLength(0);
+
+      // 4. Sync Mobile -> Desktop -> Mobile
+      const mobileBundle = await clientRepo.exportSyncBundle();
+      const { serverBundle } = SyncService.mergeSyncBundle(mobileBundle);
+      await clientRepo.mergeSyncBundle(serverBundle);
+
+      // 5. Neither Desktop nor Mobile should resurrect the removed word_folders link
+      const desktopWordsInFolder = WordService.getWords({ folderId: folder.id });
+      expect(desktopWordsInFolder).toHaveLength(0);
+
+      const mobileWordsInFolderAfterSync = await clientRepo.getWords({ folderId: folder.id });
+      expect(mobileWordsInFolderAfterSync).toHaveLength(0);
     });
 
     it('filters orphaned word_folders and reviews on client IndexedDB smart merge', async () => {

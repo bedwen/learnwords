@@ -288,6 +288,91 @@ export function mergeReviews(
 }
 
 /**
+ * Pure deterministic LWW merge for word_folders associations per word.
+ * When a word exists on both peers, the peer with the newer word.updated_at
+ * timestamp determines the authoritative set of folder memberships for that word.
+ */
+export function mergeWordFolders(
+  localWords: Word[],
+  incomingWords: Word[],
+  wordIdMap: Map<string, string>,
+  folderIdMap: Map<string, string>,
+  localWordFolders: { word_id: string; folder_id: string }[],
+  incomingWordFolders: { word_id: string; folder_id: string }[]
+): { word_id: string; folder_id: string }[] {
+  const localByWord = new Map<string, Set<string>>();
+  for (const wf of localWordFolders || []) {
+    let set = localByWord.get(wf.word_id);
+    if (!set) {
+      set = new Set();
+      localByWord.set(wf.word_id, set);
+    }
+    set.add(wf.folder_id);
+  }
+
+  const incomingByWord = new Map<string, Set<string>>();
+  for (const wf of incomingWordFolders || []) {
+    const mappedWordId = wordIdMap.get(wf.word_id) || wf.word_id;
+    const mappedFolderId = folderIdMap.get(wf.folder_id) || wf.folder_id;
+    let set = incomingByWord.get(mappedWordId);
+    if (!set) {
+      set = new Set();
+      incomingByWord.set(mappedWordId, set);
+    }
+    set.add(mappedFolderId);
+  }
+
+  const localWordUpdatedAt = new Map<string, number>();
+  for (const w of localWords) {
+    localWordUpdatedAt.set(w.id, normalizeTimestamp(w.updated_at));
+  }
+
+  const incomingWordUpdatedAt = new Map<string, number>();
+  for (const w of incomingWords) {
+    const mappedId = wordIdMap.get(w.id) || w.id;
+    incomingWordUpdatedAt.set(mappedId, normalizeTimestamp(w.updated_at));
+  }
+
+  const allWordIds = new Set<string>([
+    ...localWordUpdatedAt.keys(),
+    ...incomingWordUpdatedAt.keys(),
+    ...localByWord.keys(),
+    ...incomingByWord.keys(),
+  ]);
+
+  const result: { word_id: string; folder_id: string }[] = [];
+
+  for (const wordId of allWordIds) {
+    const localFolders = localByWord.get(wordId) || new Set<string>();
+    const incFolders = incomingByWord.get(wordId) || new Set<string>();
+
+    const inLocal = localWordUpdatedAt.has(wordId);
+    const inIncoming = incomingWordUpdatedAt.has(wordId);
+
+    let chosenFolders: Set<string>;
+    if (inLocal && inIncoming) {
+      const localTs = localWordUpdatedAt.get(wordId) || 0;
+      const incTs = incomingWordUpdatedAt.get(wordId) || 0;
+      if (incTs > localTs) {
+        chosenFolders = incFolders;
+      } else if (localTs > incTs) {
+        chosenFolders = localFolders;
+      } else {
+        chosenFolders = new Set([...localFolders, ...incFolders]);
+      }
+    } else {
+      chosenFolders = new Set([...localFolders, ...incFolders]);
+    }
+
+    for (const folderId of chosenFolders) {
+      result.push({ word_id: wordId, folder_id: folderId });
+    }
+  }
+
+  return result;
+}
+
+/**
  * Re-derives the accurate LearningState for a word by replaying its review history.
  */
 export function harmonizeWordLearningState(
@@ -427,25 +512,19 @@ export async function executeSmartMerge(
   });
   const reviewMerge = mergeReviews(localReviews, remappedReviews);
 
-  // 6. Remap and merge word_folders
-  const existingWfKeys = new Set(localWordFolders.map((wf) => `${wf.word_id}_${wf.folder_id}`));
-  const mergedWordFolders = [...localWordFolders];
-
-  if (Array.isArray(bundle.word_folders)) {
-    for (const wf of bundle.word_folders) {
-      const mappedWordId = wordIdMap.get(wf.word_id) || wf.word_id;
-      const mappedFolderId = folderIdMap.get(wf.folder_id) || wf.folder_id;
-      const key = `${mappedWordId}_${mappedFolderId}`;
-      if (!existingWfKeys.has(key)) {
-        existingWfKeys.add(key);
-        mergedWordFolders.push({
-          id: key,
-          word_id: mappedWordId,
-          folder_id: mappedFolderId,
-        });
-      }
-    }
-  }
+  // 6. Remap and merge word_folders via per-word LWW
+  const mergedWordFolders = mergeWordFolders(
+    localWords,
+    bundle.words,
+    wordIdMap,
+    folderIdMap,
+    localWordFolders,
+    Array.isArray(bundle.word_folders) ? bundle.word_folders : []
+  ).map((wf) => ({
+    id: `${wf.word_id}_${wf.folder_id}`,
+    word_id: wf.word_id,
+    folder_id: wf.folder_id,
+  }));
 
   // 7. Defensive filtering for foreign keys & soft-deleted folders
   const validWordIds = new Set<string>(wordMerge.merged.map((w) => w.id));

@@ -1,26 +1,11 @@
-import os from 'os';
 import { getDatabase, initializeSchema, closeDatabase } from './db';
-import { createApp } from './app';
+import { createApp, getLanIpAddress } from './app';
 
 const app = createApp();
 const PORT = 3001;
 
 const isLan = process.argv.includes('--lan');
 const HOST = isLan ? '0.0.0.0' : (process.env.HOST || '127.0.0.1');
-
-function getLanIpAddress(): string | null {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    const netList = interfaces[name];
-    if (!netList) continue;
-    for (const net of netList) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
-    }
-  }
-  return null;
-}
 
 // Initialize database and start server
 const db = getDatabase();

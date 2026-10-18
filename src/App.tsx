@@ -55,7 +55,15 @@ function AppContent() {
         try {
           const initialized = await isLocalDatabaseInitialized();
           if (!initialized) {
-            await hydrateLocalDatabase();
+            const isCapacitorWebView =
+              typeof window !== 'undefined' &&
+              (window.location.protocol === 'capacitor:' ||
+                window.location.protocol === 'ionic:' ||
+                ((window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+                  !window.location.port));
+            if (!isCapacitorWebView) {
+              await hydrateLocalDatabase();
+            }
           }
         } catch {
           // Silently tolerate server offline; client continues standalone
@@ -73,8 +81,10 @@ function AppContent() {
       };
 
       document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('online', triggerAutoSync);
       return () => {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('online', triggerAutoSync);
       };
     } else {
       // Desktop mode: one-time data rescue

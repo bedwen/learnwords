@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   RefreshCw,
   Wifi,
+  Copy,
 } from 'lucide-react';
 import Papa from 'papaparse';
 import {
@@ -25,7 +26,14 @@ import {
 import { getFolders } from '../api/folders';
 import { Folder } from '../types';
 import { isMobileApp } from '../platform';
-import { getLastSuccessfulSyncTime, LAST_SUCCESSFUL_SYNC_KEY } from '../sync/autoSync';
+import {
+  getLastSuccessfulSyncTime,
+  getStoredPeerUrl,
+  normalizePeerUrl,
+  checkPeerHealth,
+  LAST_SUCCESSFUL_SYNC_KEY,
+  PEER_URL_KEY,
+} from '../sync/autoSync';
 import { Button } from '../components/ui/Button';
 
 import { Input } from '../components/ui/Input';
@@ -48,33 +56,68 @@ export function DataManagement() {
 
   // LAN Peer Sync state
   const [peerUrl, setPeerUrl] = useState(() => {
-    if (typeof localStorage !== 'undefined') {
-      const saved = localStorage.getItem('learnwords-peer-url');
-      if (saved) return saved;
-      if (typeof window !== 'undefined') {
-        const port = window.location.port ? `:${window.location.port}` : '';
-        return `${window.location.protocol}//${window.location.hostname}${port}`;
-      }
-    }
-    return 'http://localhost:3001';
+    return getStoredPeerUrl() || (isMobileApp() ? '' : 'http://localhost:3001');
   });
   const [isLanSyncing, setIsLanSyncing] = useState(false);
+  const [isTestingPeer, setIsTestingPeer] = useState(false);
+  const [desktopPeerUrl, setDesktopPeerUrl] = useState<string | null>(null);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(() => getLastSuccessfulSyncTime());
 
   const handlePeerUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setPeerUrl(val);
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('learnwords-peer-url', val);
+      const normalized = normalizePeerUrl(val);
+      localStorage.setItem(PEER_URL_KEY, normalized || val.trim());
+    }
+  };
+
+  const handleTestPeerConnection = async () => {
+    const normalized = normalizePeerUrl(peerUrl);
+    if (!normalized) {
+      const msg = "Please enter your computer's LAN IP address (e.g. 192.168.1.100:3001).";
+      setError(msg);
+      toast.error(msg);
+      return;
+    }
+    setPeerUrl(normalized);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(PEER_URL_KEY, normalized);
+    }
+
+    setIsTestingPeer(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const reachable = await checkPeerHealth(normalized, 3000);
+      if (reachable) {
+        const msg = `Peer (${normalized}) is online and reachable!`;
+        setSuccess(msg);
+        toast.success(msg);
+      } else {
+        const msg = `Could not reach ${normalized}. Ensure the desktop server is running with --lan and both devices are on the same Wi-Fi.`;
+        setError(msg);
+        toast.error(msg);
+      }
+    } finally {
+      setIsTestingPeer(false);
     }
   };
 
   const handleLanSync = async () => {
+    const normalized = normalizePeerUrl(peerUrl);
+    if (normalized) {
+      setPeerUrl(normalized);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(PEER_URL_KEY, normalized);
+      }
+    }
+
     setIsLanSyncing(true);
     setError(null);
     setSuccess(null);
     try {
-      const res = await syncWithLanPeer(peerUrl);
+      const res = await syncWithLanPeer(normalized || peerUrl);
       if (res.success) {
         const msg = `Synced: ${res.summary}`;
         setSuccess(msg);
@@ -103,7 +146,6 @@ export function DataManagement() {
     }
   };
 
-
   // JSON Backup Restore state
   const [importFileData, setImportFileData] = useState<ExportData | null>(null);
   const [confirmReplaceText, setConfirmReplaceText] = useState('');
@@ -128,6 +170,17 @@ export function DataManagement() {
         setUngroupedCount(res.ungroupedCount);
       })
       .catch(() => {});
+
+    if (!isMobileApp()) {
+      fetch('/api/sync/info')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.peerUrl) {
+            setDesktopPeerUrl(data.peerUrl);
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   // --- Export Sync Bundle ---
@@ -481,8 +534,32 @@ export function DataManagement() {
             <CardContent className="space-y-4">
               <div className="p-4 rounded-xl bg-secondary/30 border border-border text-xs leading-relaxed text-muted-foreground space-y-2">
                 <p>
-                  <strong className="text-foreground">Wi-Fi Synchronization:</strong> Enter the IP address and port of your LearnWords peer node (e.g., <code className="text-primary font-mono font-medium">http://192.168.1.100:3001</code>). Make sure both devices are connected to the same Wi-Fi network.
+                  <strong className="text-foreground">Wi-Fi Synchronization:</strong> Enter the IP address of your LearnWords peer node (e.g., <code className="text-primary font-mono font-medium">192.168.1.100:3001</code>). Make sure both devices are connected to the same Wi-Fi network and the desktop server is started with <code className="text-foreground font-mono">npm run dev:lan</code>.
                 </p>
+                {!isMobileApp() && desktopPeerUrl && (
+                  <div className="pt-2 mt-2 border-t border-border/60 flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      <strong className="text-foreground">This Computer's LAN Address:</strong>{' '}
+                      <code className="text-primary font-mono font-semibold">{desktopPeerUrl}</code>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs gap-1.5"
+                      onClick={() => {
+                        if (navigator?.clipboard?.writeText) {
+                          navigator.clipboard.writeText(desktopPeerUrl).then(() => {
+                            toast.success('Copied LAN address to clipboard!');
+                          }).catch(() => {});
+                        }
+                      }}
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      <span>Copy</span>
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-3 pt-1">
@@ -491,11 +568,11 @@ export function DataManagement() {
                     Peer Server URL
                   </label>
                   <Input
-                    type="url"
+                    type="text"
                     value={peerUrl}
                     onChange={handlePeerUrlChange}
-                    placeholder="http://192.168.1.100:3001"
-                    disabled={isLanSyncing || isProcessing}
+                    placeholder="e.g. 192.168.1.100:3001"
+                    disabled={isLanSyncing || isTestingPeer || isProcessing}
                   />
                 </div>
 
@@ -506,20 +583,32 @@ export function DataManagement() {
                   </span>
                 </div>
 
-                <Button
-                  onClick={handleLanSync}
-                  disabled={isLanSyncing || isProcessing}
-                  className="w-full gap-2"
-                >
-                  <Wifi className="h-4 w-4" />
-                  <span>
-                    {isLanSyncing
-                      ? 'Syncing with Peer...'
-                      : isMobileApp()
-                      ? 'Sync Now'
-                      : 'Sync with Peer'}
-                  </span>
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleTestPeerConnection}
+                    disabled={isLanSyncing || isTestingPeer || isProcessing}
+                    className="sm:w-44 gap-2"
+                  >
+                    <Wifi className="h-4 w-4" />
+                    <span>{isTestingPeer ? 'Testing...' : 'Test Connection'}</span>
+                  </Button>
+                  <Button
+                    onClick={handleLanSync}
+                    disabled={isLanSyncing || isTestingPeer || isProcessing}
+                    className="flex-1 gap-2"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isLanSyncing ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isLanSyncing
+                        ? 'Syncing with Peer...'
+                        : isMobileApp()
+                        ? 'Sync Now'
+                        : 'Sync with Peer'}
+                    </span>
+                  </Button>
+                </div>
               </div>
 
             </CardContent>

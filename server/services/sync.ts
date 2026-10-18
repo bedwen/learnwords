@@ -11,6 +11,7 @@ import {
   mergeWords,
   mergeFolders,
   mergeReviews,
+  mergeWordFolders,
   harmonizeWordLearningState,
   normalizeTimestamp,
   generateSyncId,
@@ -185,26 +186,15 @@ export class SyncService {
     });
     const reviewMerge = mergeReviews(localBundle.review_history, remappedIncomingReviews);
 
-    // 5. Remap and merge word_folders
-    const existingWfKeys = new Set(
-      localBundle.word_folders.map((wf) => `${wf.word_id}_${wf.folder_id}`)
+    // 5. Remap and merge word_folders via per-word LWW
+    const mergedWordFolders = mergeWordFolders(
+      localBundle.words,
+      incomingBundle.words,
+      wordIdMap,
+      folderIdMap,
+      localBundle.word_folders,
+      Array.isArray(incomingBundle.word_folders) ? incomingBundle.word_folders : []
     );
-    const mergedWordFolders = [...localBundle.word_folders];
-
-    if (Array.isArray(incomingBundle.word_folders)) {
-      for (const wf of incomingBundle.word_folders) {
-        const mappedWordId = wordIdMap.get(wf.word_id) || wf.word_id;
-        const mappedFolderId = folderIdMap.get(wf.folder_id) || wf.folder_id;
-        const key = `${mappedWordId}_${mappedFolderId}`;
-        if (!existingWfKeys.has(key)) {
-          existingWfKeys.add(key);
-          mergedWordFolders.push({
-            word_id: mappedWordId,
-            folder_id: mappedFolderId,
-          });
-        }
-      }
-    }
 
     // 6. Defensive filtering for foreign keys & soft-deleted folders
     const validWordIds = new Set<string>(wordMerge.merged.map((w) => w.id));
@@ -253,9 +243,7 @@ export class SyncService {
         deleted_at = excluded.deleted_at
     `);
 
-    const deleteWordFolderByFolderStmt = db.prepare(
-      'DELETE FROM word_folders WHERE folder_id = ?'
-    );
+    const deleteAllWordFoldersStmt = db.prepare('DELETE FROM word_folders');
 
     const upsertWordStmt = db.prepare(`
       INSERT INTO words (id, sync_id, word, meaning, level, part_of_speech, example_sentence, example_translation, notes, created_at, updated_at, deleted_at)
@@ -311,11 +299,6 @@ export class SyncService {
         );
       }
 
-      // Cleanup word_folders for deleted folders
-      for (const folderId of deletedFolderIds) {
-        deleteWordFolderByFolderStmt.run(folderId);
-      }
-
       // Words
       for (const w of wordMerge.merged) {
         upsertWordStmt.run(
@@ -349,7 +332,8 @@ export class SyncService {
         );
       }
 
-      // Word Folders
+      // Word Folders: replace table with merged valid links so unlinked rows are removed
+      deleteAllWordFoldersStmt.run();
       for (const wf of validWordFolders) {
         insertWordFolderStmt.run(wf.word_id, wf.folder_id);
       }

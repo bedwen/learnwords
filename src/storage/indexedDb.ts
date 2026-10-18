@@ -355,7 +355,8 @@ export class IndexedDbAdapter {
   private version: number;
   private dbPromise: Promise<IDBDatabase> | null = null;
   private factoryResolver: () => IDBFactory;
-  private migrationDone = false;
+  private migrationPromise: Promise<void> | null = null;
+  private isMigrating = false;
 
   constructor(dbName = DB_NAME, version = DB_VERSION, customFactory?: IDBFactory | null) {
     this.dbName = dbName;
@@ -364,121 +365,120 @@ export class IndexedDbAdapter {
   }
 
   async getDb(): Promise<IDBDatabase> {
-    if (this.dbPromise) {
-      const db = await this.dbPromise;
-      if (!this.migrationDone) {
-        this.migrationDone = true;
-        await this.migrateExistingRecords();
-      }
-      return db;
-    }
-
-    this.dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const factory = this.factoryResolver();
-      if (!factory) {
-        reject(new Error('IndexedDB is not supported in this environment.'));
-        return;
-      }
-
-      const request = factory.open(this.dbName, this.version);
-
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        const tx = (event.target as IDBOpenDBRequest).transaction;
-
-        // 1. words: stores vocabulary content
-        let wordsStore: IDBObjectStore;
-        if (!db.objectStoreNames.contains('words')) {
-          wordsStore = db.createObjectStore('words', { keyPath: 'id' });
-          wordsStore.createIndex('word', 'word', { unique: false });
-          wordsStore.createIndex('level', 'level', { unique: false });
-          wordsStore.createIndex('created_at', 'created_at', { unique: false });
-        } else {
-          wordsStore = tx ? tx.objectStore('words') : (event.target as any).source;
+    if (!this.dbPromise) {
+      this.dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+        const factory = this.factoryResolver();
+        if (!factory) {
+          reject(new Error('IndexedDB is not supported in this environment.'));
+          return;
         }
-        if (wordsStore && wordsStore.indexNames) {
-          if (!wordsStore.indexNames.contains('sync_id')) {
-            wordsStore.createIndex('sync_id', 'sync_id', { unique: true });
+
+        const request = factory.open(this.dbName, this.version);
+
+        request.onupgradeneeded = (event) => {
+          const db = (event.target as IDBOpenDBRequest).result;
+          const tx = (event.target as IDBOpenDBRequest).transaction;
+
+          // 1. words: stores vocabulary content
+          let wordsStore: IDBObjectStore;
+          if (!db.objectStoreNames.contains('words')) {
+            wordsStore = db.createObjectStore('words', { keyPath: 'id' });
+            wordsStore.createIndex('word', 'word', { unique: false });
+            wordsStore.createIndex('level', 'level', { unique: false });
+            wordsStore.createIndex('created_at', 'created_at', { unique: false });
+          } else {
+            wordsStore = tx ? tx.objectStore('words') : (event.target as any).source;
           }
-          if (!wordsStore.indexNames.contains('deleted_at')) {
-            wordsStore.createIndex('deleted_at', 'deleted_at', { unique: false });
+          if (wordsStore && wordsStore.indexNames) {
+            if (!wordsStore.indexNames.contains('sync_id')) {
+              wordsStore.createIndex('sync_id', 'sync_id', { unique: true });
+            }
+            if (!wordsStore.indexNames.contains('deleted_at')) {
+              wordsStore.createIndex('deleted_at', 'deleted_at', { unique: false });
+            }
           }
-        }
 
-        // 2. learning_states: current learning state per word (1:1)
-        if (!db.objectStoreNames.contains('learning_states')) {
-          const lsStore = db.createObjectStore('learning_states', { keyPath: 'id' });
-          lsStore.createIndex('word_id', 'word_id', { unique: true });
-          lsStore.createIndex('next_review', 'next_review', { unique: false });
-          lsStore.createIndex('mastery', 'mastery', { unique: false });
-        }
-
-        // 3. review_history: review logs per word (1:N)
-        let rhStore: IDBObjectStore;
-        if (!db.objectStoreNames.contains('review_history')) {
-          rhStore = db.createObjectStore('review_history', { keyPath: 'id' });
-          rhStore.createIndex('word_id', 'word_id', { unique: false });
-          rhStore.createIndex('reviewed_at', 'reviewed_at', { unique: false });
-        } else {
-          rhStore = tx ? tx.objectStore('review_history') : (event.target as any).source;
-        }
-        if (rhStore && rhStore.indexNames) {
-          if (!rhStore.indexNames.contains('sync_id')) {
-            rhStore.createIndex('sync_id', 'sync_id', { unique: true });
+          // 2. learning_states: current learning state per word (1:1)
+          if (!db.objectStoreNames.contains('learning_states')) {
+            const lsStore = db.createObjectStore('learning_states', { keyPath: 'id' });
+            lsStore.createIndex('word_id', 'word_id', { unique: true });
+            lsStore.createIndex('next_review', 'next_review', { unique: false });
+            lsStore.createIndex('mastery', 'mastery', { unique: false });
           }
-        }
 
-        // 4. folders: named, colored word groups
-        let foldersStore: IDBObjectStore;
-        if (!db.objectStoreNames.contains('folders')) {
-          foldersStore = db.createObjectStore('folders', { keyPath: 'id' });
-          foldersStore.createIndex('name', 'name', { unique: false });
-        } else {
-          foldersStore = tx ? tx.objectStore('folders') : (event.target as any).source;
-        }
-        if (foldersStore && foldersStore.indexNames) {
-          if (!foldersStore.indexNames.contains('sync_id')) {
-            foldersStore.createIndex('sync_id', 'sync_id', { unique: true });
+          // 3. review_history: review logs per word (1:N)
+          let rhStore: IDBObjectStore;
+          if (!db.objectStoreNames.contains('review_history')) {
+            rhStore = db.createObjectStore('review_history', { keyPath: 'id' });
+            rhStore.createIndex('word_id', 'word_id', { unique: false });
+            rhStore.createIndex('reviewed_at', 'reviewed_at', { unique: false });
+          } else {
+            rhStore = tx ? tx.objectStore('review_history') : (event.target as any).source;
           }
-          if (!foldersStore.indexNames.contains('deleted_at')) {
-            foldersStore.createIndex('deleted_at', 'deleted_at', { unique: false });
+          if (rhStore && rhStore.indexNames) {
+            if (!rhStore.indexNames.contains('sync_id')) {
+              rhStore.createIndex('sync_id', 'sync_id', { unique: true });
+            }
           }
-        }
 
-        // 5. word_folders: junction table
-        if (!db.objectStoreNames.contains('word_folders')) {
-          const wfStore = db.createObjectStore('word_folders', { keyPath: 'id' });
-          wfStore.createIndex('word_id', 'word_id', { unique: false });
-          wfStore.createIndex('folder_id', 'folder_id', { unique: false });
-        }
+          // 4. folders: named, colored word groups
+          let foldersStore: IDBObjectStore;
+          if (!db.objectStoreNames.contains('folders')) {
+            foldersStore = db.createObjectStore('folders', { keyPath: 'id' });
+            foldersStore.createIndex('name', 'name', { unique: false });
+          } else {
+            foldersStore = tx ? tx.objectStore('folders') : (event.target as any).source;
+          }
+          if (foldersStore && foldersStore.indexNames) {
+            if (!foldersStore.indexNames.contains('sync_id')) {
+              foldersStore.createIndex('sync_id', 'sync_id', { unique: true });
+            }
+            if (!foldersStore.indexNames.contains('deleted_at')) {
+              foldersStore.createIndex('deleted_at', 'deleted_at', { unique: false });
+            }
+          }
 
-        // 6. sync_meta: local hydration and sync markers
-        if (!db.objectStoreNames.contains('sync_meta')) {
-          db.createObjectStore('sync_meta', { keyPath: 'key' });
-        }
-      };
+          // 5. word_folders: junction table
+          if (!db.objectStoreNames.contains('word_folders')) {
+            const wfStore = db.createObjectStore('word_folders', { keyPath: 'id' });
+            wfStore.createIndex('word_id', 'word_id', { unique: false });
+            wfStore.createIndex('folder_id', 'folder_id', { unique: false });
+          }
 
-      request.onsuccess = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-
-        db.onversionchange = () => {
-          db.close();
-          this.dbPromise = null;
+          // 6. sync_meta: local hydration and sync markers
+          if (!db.objectStoreNames.contains('sync_meta')) {
+            db.createObjectStore('sync_meta', { keyPath: 'key' });
+          }
         };
 
-        resolve(db);
-      };
+        request.onsuccess = (event) => {
+          const db = (event.target as IDBOpenDBRequest).result;
 
-      request.onerror = (event) => {
-        this.dbPromise = null;
-        reject((event.target as IDBOpenDBRequest).error || new Error('Failed to open IndexedDB'));
-      };
-    });
+          db.onversionchange = () => {
+            db.close();
+            this.dbPromise = null;
+            this.migrationPromise = null;
+          };
+
+          resolve(db);
+        };
+
+        request.onerror = (event) => {
+          this.dbPromise = null;
+          reject((event.target as IDBOpenDBRequest).error || new Error('Failed to open IndexedDB'));
+        };
+      });
+    }
 
     const db = await this.dbPromise;
-    if (!this.migrationDone) {
-      this.migrationDone = true;
-      await this.migrateExistingRecords();
+    if (!this.isMigrating) {
+      if (!this.migrationPromise) {
+        this.isMigrating = true;
+        this.migrationPromise = this.migrateExistingRecords().finally(() => {
+          this.isMigrating = false;
+        });
+      }
+      await this.migrationPromise;
     }
     return db;
   }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Target,
   CheckCircle2,
@@ -18,7 +18,7 @@ export function Statistics() {
   const [stats, setStats] = useState<DetailedStats | null>(cachedStats);
   const [loading, setLoading] = useState(!cachedStats);
 
-  useEffect(() => {
+  const loadStats = useCallback(() => {
     getDetailedStats()
       .then((data) => {
         setStats(data);
@@ -27,6 +27,12 @@ export function Statistics() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadStats();
+    window.addEventListener('learnwords:synced', loadStats);
+    return () => window.removeEventListener('learnwords:synced', loadStats);
+  }, [loadStats]);
 
   if (loading && !stats) {
     return (

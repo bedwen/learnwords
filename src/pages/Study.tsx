@@ -108,6 +108,20 @@ export function Study({ folderId }: StudyProps = {}) {
     fetchQueue();
   }, [fetchQueue]);
 
+  useEffect(() => {
+    const handleSynced = () => {
+      fetchQueue();
+      getFolders()
+        .then((data) => {
+          setFolders(data.folders);
+          setCached('folders_list', data);
+        })
+        .catch(console.error);
+    };
+    window.addEventListener('learnwords:synced', handleSynced);
+    return () => window.removeEventListener('learnwords:synced', handleSynced);
+  }, [fetchQueue]);
+
   const handleRating = useCallback(
     async (rating: ReviewRating) => {
       if (queue.length === 0 || submitting) return;

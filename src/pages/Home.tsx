@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen,
@@ -25,7 +25,7 @@ export function Home() {
   const [summary, setSummary] = useState<HomeSummary | null>(cachedSummary);
   const [loading, setLoading] = useState(!cachedSummary);
 
-  useEffect(() => {
+  const loadHomeData = useCallback(() => {
     getHomeSummary()
       .then((data) => {
         setSummary(data);
@@ -34,6 +34,12 @@ export function Home() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadHomeData();
+    window.addEventListener('learnwords:synced', loadHomeData);
+    return () => window.removeEventListener('learnwords:synced', loadHomeData);
+  }, [loadHomeData]);
 
   const { weeks, monthLabels } = useMemo(() => {
     if (!summary) return { weeks: [], monthLabels: [] };

@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   autoSync,
   checkPeerHealth,
+  normalizePeerUrl,
   resetSyncState,
   PEER_URL_KEY,
   LAST_SYNC_ATTEMPT_KEY,
@@ -49,6 +50,18 @@ describe('Automatic LAN Sync (autoSync)', () => {
     localStorage.clear();
     resetSyncState();
     vi.restoreAllMocks();
+  });
+
+  describe('normalizePeerUrl', () => {
+    it('normalizes bare IPv4 addresses and strips trailing slashes', () => {
+      expect(normalizePeerUrl('192.168.1.42')).toBe('http://192.168.1.42:3001');
+      expect(normalizePeerUrl('192.168.1.42:3001/')).toBe('http://192.168.1.42:3001');
+      expect(normalizePeerUrl('http://192.168.1.42:3001')).toBe('http://192.168.1.42:3001');
+      expect(normalizePeerUrl('  10.0.0.15  ')).toBe('http://10.0.0.15:3001');
+      expect(normalizePeerUrl('my-laptop.local')).toBe('http://my-laptop.local:3001');
+      expect(normalizePeerUrl('capacitor://localhost')).toBe('');
+      expect(normalizePeerUrl('')).toBe('');
+    });
   });
 
   describe('checkPeerHealth', () => {

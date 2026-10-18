@@ -452,7 +452,8 @@ export class WordService {
 
   /**
    * Add multiple words to a folder, or remove them from it.
-   * Only word_folders links are changed. Throws FolderNotFoundError if the folder is missing.
+   * Updates word_folders links and bumps words.updated_at for LWW sync.
+   * Throws FolderNotFoundError if the folder is missing.
    */
   static batchUpdateFolder(wordIds: string[], folderId: string, action: 'add' | 'remove'): void {
     const db = getDatabase();
@@ -465,13 +466,16 @@ export class WordService {
     const ids = Array.from(new Set(wordIds));
     if (ids.length === 0) return;
 
+    const now = new Date().toISOString();
     const stmt = action === 'add'
       ? db.prepare(`INSERT OR IGNORE INTO word_folders (word_id, folder_id) SELECT id, ? FROM words WHERE id = ?`)
       : db.prepare(`DELETE FROM word_folders WHERE folder_id = ? AND word_id = ?`);
+    const updateWordStmt = db.prepare(`UPDATE words SET updated_at = ? WHERE id = ?`);
 
     const transaction = db.transaction((idList: string[]) => {
       for (const id of idList) {
         stmt.run(folderId, id);
+        updateWordStmt.run(now, id);
       }
     });
 

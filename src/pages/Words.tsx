@@ -165,7 +165,19 @@ export function Words() {
   useEffect(() => {
     if (activeFolderId === null) return;
     fetchWords();
-  }, [fetchWords]);
+  }, [fetchWords, activeFolderId]);
+
+  // Refresh folders and active word list when background or manual sync completes
+  useEffect(() => {
+    const handleSynced = () => {
+      fetchFolders();
+      if (activeFolderId !== null) {
+        fetchWords();
+      }
+    };
+    window.addEventListener('learnwords:synced', handleSynced);
+    return () => window.removeEventListener('learnwords:synced', handleSynced);
+  }, [fetchFolders, fetchWords, activeFolderId]);
 
   // Keep selection limited to currently visible words (e.g. after filtering),
   // so batch actions never affect words the user cannot see.

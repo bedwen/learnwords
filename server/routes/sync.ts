@@ -1,9 +1,24 @@
 import { Router } from 'express';
 import express from 'express';
 import { SyncService } from '../services/sync';
+import { getLanIpAddress } from '../app';
 
 const router = Router();
 const syncJsonParser = express.json({ limit: '50mb' });
+
+/**
+ * GET /api/sync/info
+ * Returns LAN peer discovery metadata (host LAN IP and peer URL).
+ */
+router.get('/info', (_req, res) => {
+  const lanIp = getLanIpAddress();
+  return res.json({
+    status: 'ok',
+    lanIp,
+    port: 3001,
+    peerUrl: lanIp ? `http://${lanIp}:3001` : null,
+  });
+});
 
 /**
  * POST /api/sync

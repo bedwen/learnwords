@@ -2,13 +2,21 @@ import { ExportData, CsvImportResult, SyncBundle, SyncMergeResult } from '../typ
 import { localRepository } from '../storage/localRepository';
 import { clearCache } from './cache';
 import { isMobileApp } from '../platform';
+import { normalizePeerUrl } from '../sync/autoSync';
 
 export type { ExportData, CsvImportResult, SyncBundle, SyncMergeResult };
 
 const API_BASE = '/api/data';
+const SYNC_REQUEST_TIMEOUT_MS = 15_000;
 
 function getOrigin(): string {
   return typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:3001';
+}
+
+function dispatchSyncedEvent(result: SyncMergeResult): void {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    window.dispatchEvent(new CustomEvent('learnwords:synced', { detail: result }));
+  }
 }
 
 export async function exportData(): Promise<ExportData> {
@@ -129,6 +137,7 @@ export async function importSyncBundle(file: File): Promise<SyncMergeResult> {
     const result = await localRepository.mergeSyncBundle(bundle);
     if (result.success) {
       clearCache();
+      dispatchSyncedEvent(result);
     }
     return result;
   }
@@ -147,28 +156,39 @@ export async function importSyncBundle(file: File): Promise<SyncMergeResult> {
 
   const data = await res.json();
   clearCache();
+  dispatchSyncedEvent(data.result);
   return data.result;
 }
 
 export async function syncWithLanPeer(
   peerUrl?: string
 ): Promise<{ success: boolean; result: SyncMergeResult; summary: string }> {
-  let normalizedUrl = (peerUrl || '').trim();
-  if (!normalizedUrl) {
-    normalizedUrl = typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:3001';
+  let normalizedUrl = normalizePeerUrl(peerUrl);
+  if (!normalizedUrl && !isMobileApp()) {
+    normalizedUrl = normalizePeerUrl(getOrigin());
   }
-  normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+  if (!normalizedUrl) {
+    throw new Error("Please enter your computer's LAN IP address (e.g. 192.168.1.100:3001).");
+  }
 
   if (isMobileApp()) {
     const localBundle = await localRepository.exportSyncBundle();
 
-    const response = await fetch(`${normalizedUrl}/api/sync`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ bundle: localBundle }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SYNC_REQUEST_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${normalizedUrl}/api/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ bundle: localBundle }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (!response.ok) {
       const errorBody = await response.json().catch(() => ({}));
@@ -194,6 +214,8 @@ export async function syncWithLanPeer(
       reviewsMerged: (data.result?.reviewsMerged || 0) + localMergeResult.reviewsMerged,
     };
 
+    dispatchSyncedEvent(combinedResult);
+
     const parts: string[] = [];
     if (combinedResult.wordsAdded > 0) parts.push(`+${combinedResult.wordsAdded} words`);
     if (combinedResult.wordsUpdated > 0) parts.push(`${combinedResult.wordsUpdated} updated`);
@@ -218,13 +240,21 @@ export async function syncWithLanPeer(
   }
   const localBundle = await localRes.json();
 
-  const response = await fetch(`${normalizedUrl}/api/sync`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ bundle: localBundle }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SYNC_REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(`${normalizedUrl}/api/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ bundle: localBundle }),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (!response.ok) {
     const errorBody = await response.json().catch(() => ({}));
@@ -272,6 +302,8 @@ export async function syncWithLanPeer(
     foldersDeleted: (data.result?.foldersDeleted || 0) + localMergeResult.foldersDeleted,
     reviewsMerged: (data.result?.reviewsMerged || 0) + localMergeResult.reviewsMerged,
   };
+
+  dispatchSyncedEvent(combinedResult);
 
   const parts: string[] = [];
   if (combinedResult.wordsAdded > 0) parts.push(`+${combinedResult.wordsAdded} words`);

@@ -681,19 +681,26 @@ export class LocalRepository {
     const uniqueIds = Array.from(new Set(wordIds));
     if (uniqueIds.length === 0) return;
 
+    const nowEpoch = Date.now();
     for (const wordId of uniqueIds) {
       const recordId = `${wordId}_${folderId}`;
+      const existingWord = await this.adapter.get<Word>('words', wordId);
       if (action === 'add') {
-        const existingWord = await this.adapter.get<Word>('words', wordId);
         if (existingWord) {
           await this.adapter.put<LocalWordFolderRecord>('word_folders', {
             id: recordId,
             word_id: wordId,
             folder_id: folderId,
           });
+          existingWord.updated_at = nowEpoch;
+          await this.adapter.put('words', existingWord);
         }
       } else {
         await this.adapter.delete('word_folders', recordId);
+        if (existingWord) {
+          existingWord.updated_at = nowEpoch;
+          await this.adapter.put('words', existingWord);
+        }
       }
     }
   }
@@ -1099,6 +1106,11 @@ export class LocalRepository {
   async removeWordFromFolder(wordId: string, folderId: string): Promise<void> {
     const recordId = `${wordId}_${folderId}`;
     await this.adapter.delete('word_folders', recordId);
+    const word = await this.adapter.get<Word>('words', wordId);
+    if (word) {
+      word.updated_at = Date.now();
+      await this.adapter.put('words', word);
+    }
   }
 
   /**

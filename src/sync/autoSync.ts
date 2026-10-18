@@ -1,4 +1,5 @@
 import { syncWithLanPeer, SyncMergeResult } from '../api/data';
+import { isMobileApp } from '../platform';
 
 export interface AutoSyncOutcome {
   ran: boolean;
@@ -24,9 +25,45 @@ export function resetSyncState(): void {
   isSyncRunning = false;
 }
 
+/**
+ * Normalizes user-supplied LAN peer URLs (e.g. "192.168.1.42" -> "http://192.168.1.42:3001").
+ * On mobile Capacitor WebViews, rejects portless localhost origins ("https://localhost")
+ * so the mobile app never treats its own local WebView origin as a remote LAN peer.
+ */
+export function normalizePeerUrl(input?: string | null): string {
+  const raw = (input || '').trim().replace(/\/+$/, '');
+  if (!raw) return '';
+
+  const hasProtocol = /^(?:https?|capacitor|ionic):\/\//i.test(raw);
+  const withProtocol = hasProtocol ? raw : `http://${raw}`;
+
+  try {
+    const url = new URL(withProtocol);
+    if (url.protocol === 'capacitor:' || url.protocol === 'ionic:') {
+      return '';
+    }
+    if (isMobileApp() && (url.hostname === 'localhost' || url.hostname === '127.0.0.1') && !url.port) {
+      return '';
+    }
+    const isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(url.hostname);
+    const isLocalHost =
+      url.hostname.endsWith('.local') ||
+      url.hostname === 'localhost' ||
+      url.hostname === '127.0.0.1';
+    if (!url.port && (isIpv4 || isLocalHost)) {
+      url.port = '3001';
+    }
+    return `${url.protocol}//${url.host}`;
+  } catch {
+    return raw;
+  }
+}
+
 export function getStoredPeerUrl(): string | null {
   if (typeof localStorage === 'undefined') return null;
-  return localStorage.getItem(PEER_URL_KEY);
+  const saved = localStorage.getItem(PEER_URL_KEY);
+  const normalized = normalizePeerUrl(saved);
+  return normalized || null;
 }
 
 export function getLastSuccessfulSyncTime(): string | null {
@@ -38,7 +75,8 @@ export async function checkPeerHealth(
   peerUrl: string,
   timeoutMs: number = HEALTH_CHECK_TIMEOUT_MS
 ): Promise<boolean> {
-  const normalized = peerUrl.trim().replace(/\/+$/, '');
+  const normalized = normalizePeerUrl(peerUrl);
+  if (!normalized) return false;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 

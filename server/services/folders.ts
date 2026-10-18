@@ -149,6 +149,7 @@ export class FolderService {
    */
   static setWordFolders(wordId: string, folderIds: string[]): void {
     const db = getDatabase();
+    const now = new Date().toISOString();
 
     const transaction = db.transaction(() => {
       db.prepare('DELETE FROM word_folders WHERE word_id = ?').run(wordId);
@@ -159,6 +160,8 @@ export class FolderService {
           insert.run(wordId, folderId);
         }
       }
+
+      db.prepare('UPDATE words SET updated_at = ? WHERE id = ?').run(now, wordId);
     });
 
     transaction();
@@ -215,7 +218,16 @@ export class FolderService {
    */
   static removeWordFromFolder(wordId: string, folderId: string): boolean {
     const db = getDatabase();
-    const result = db.prepare('DELETE FROM word_folders WHERE word_id = ? AND folder_id = ?').run(wordId, folderId);
-    return result.changes > 0;
+    const now = new Date().toISOString();
+    let changes = 0;
+    const tx = db.transaction(() => {
+      const result = db.prepare('DELETE FROM word_folders WHERE word_id = ? AND folder_id = ?').run(wordId, folderId);
+      changes = result.changes;
+      if (changes > 0) {
+        db.prepare('UPDATE words SET updated_at = ? WHERE id = ?').run(now, wordId);
+      }
+    });
+    tx();
+    return changes > 0;
   }
 }
