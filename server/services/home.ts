@@ -39,11 +39,11 @@ export class HomeService {
       };
     });
 
-    // 4. Activity calendar for the last 13 weeks (~90 days)
+    // 4. Activity calendar for the last 13 weeks (~90-98 days)
     const reviewHistoryRows = db.prepare(`
       SELECT date(reviewed_at) as date, COUNT(*) as count
       FROM review_history
-      WHERE reviewed_at >= date('now', '-90 days')
+      WHERE reviewed_at >= date('now', '-98 days')
       GROUP BY date(reviewed_at)
       ORDER BY date ASC
     `).all() as { date: string; count: number }[];
@@ -51,7 +51,7 @@ export class HomeService {
     const wordRows = db.prepare(`
       SELECT date(created_at) as date, COUNT(*) as count
       FROM words
-      WHERE created_at >= date('now', '-90 days') AND deleted_at IS NULL
+      WHERE created_at >= date('now', '-98 days') AND deleted_at IS NULL
       GROUP BY date(created_at)
       ORDER BY date ASC
     `).all() as { date: string; count: number }[];

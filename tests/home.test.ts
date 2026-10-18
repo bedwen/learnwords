@@ -249,4 +249,52 @@ describe('HomeService', () => {
     expect(summary.totalContributionsLastYear).toBe(2); // 1 word + 1 review 2 days ago
     expect(summary.currentStreak).toBe(0);
   });
+
+  it('should include reviews and words created 95 days ago in 13-week activityDays window', () => {
+    // SQLite's date('now') is the system date.
+    // Simulate a Saturday grid (where totalDays = 98) using the nearest Saturday to today.
+    const db = globalThis.__TEST_DB__;
+    const realNow = new Date();
+    // Choose a Saturday where 95 days before realNow falls into the 13-week grid (up to 97 days before that Saturday)
+    // The previous Saturday is realNow - ((realNow.getUTCDay() + 1) % 7) days
+    const daysSinceSaturday = (realNow.getUTCDay() + 1) % 7;
+    const simulatedSaturday = new Date(realNow);
+    simulatedSaturday.setUTCDate(simulatedSaturday.getUTCDate() - daysSinceSaturday);
+    simulatedSaturday.setUTCHours(12, 0, 0, 0);
+
+    // 95 days before SQLite's 'now' (realNow)
+    const ninetyFiveDaysAgo = new Date(realNow);
+    ninetyFiveDaysAgo.setUTCDate(ninetyFiveDaysAgo.getUTCDate() - 95);
+    const ninetyFiveDaysAgoIso = ninetyFiveDaysAgo.toISOString();
+    const ninetyFiveDateStr = ninetyFiveDaysAgoIso.split('T')[0];
+
+    const w1 = WordService.createWord({ word: 'w-old', meaning: 'm-old', level: 'B2' });
+    db.prepare('UPDATE words SET created_at = ? WHERE id = ?').run(ninetyFiveDaysAgoIso, w1.id);
+
+    db.prepare(`
+      INSERT INTO review_history (id, word_id, rating, mastery_before, mastery_after, interval_step_before, interval_step_after, reviewed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run('rev-95-days', w1.id, 'good', 1, 2, 1, 2, ninetyFiveDaysAgoIso);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(simulatedSaturday);
+
+    try {
+      const summary = HomeService.getHomeSummary();
+      expect(summary.activityDays).toBeDefined();
+
+      const dayEntry = summary.activityDays!.find(d => d.date === ninetyFiveDateStr);
+      expect(dayEntry).toBeDefined();
+      expect(dayEntry!.wordsAdded).toBe(1);
+      expect(dayEntry!.reviews).toBe(1);
+      expect(dayEntry!.count).toBe(2);
+
+      // Verify backwards-compatible reviewActivity also reflects the entry
+      const fallbackEntry = summary.reviewActivity!.find(d => d.date === ninetyFiveDateStr);
+      expect(fallbackEntry).toBeDefined();
+      expect(fallbackEntry!.count).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
