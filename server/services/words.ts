@@ -61,8 +61,8 @@ export class WordService {
     }
 
     if (options?.search) {
-      query += ` AND (w.word LIKE ? OR w.meaning LIKE ?)`;
-      params.push(`%${options.search}%`, `%${options.search}%`);
+      query += ` AND (w.word LIKE ? OR w.meaning LIKE ? OR w.notes LIKE ?)`;
+      params.push(`%${options.search}%`, `%${options.search}%`, `%${options.search}%`);
     }
 
     if (options?.level) {
@@ -282,8 +282,8 @@ export class WordService {
     const params: any[] = [];
 
     if (filters?.search) {
-      query += ' AND (w.word LIKE ? OR w.meaning LIKE ?)';
-      params.push(`%${filters.search}%`, `%${filters.search}%`);
+      query += ' AND (w.word LIKE ? OR w.meaning LIKE ? OR w.notes LIKE ?)';
+      params.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
     }
 
     if (filters?.level) {

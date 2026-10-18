@@ -109,6 +109,36 @@ describe('WordService', () => {
     expect(both[0].word).toBe('apple');
   });
 
+  it('should find words when search query matches only notes in getWords and getTrashWords', () => {
+    const wordWithNotes = WordService.createWord({
+      word: 'serendipity',
+      meaning: 'pleasant surprise',
+      level: 'B2',
+      notes: 'Remember this mnemonic: finding gems by chance',
+    });
+    WordService.createWord({
+      word: 'ephemeral',
+      meaning: 'short-lived',
+      level: 'C1',
+      notes: 'Fleeting moments',
+    });
+
+    // 1. Search in active words matching only notes
+    const results = WordService.getWords({ search: 'mnemonic' });
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe(wordWithNotes.id);
+
+    // 2. Soft-delete word and verify getTrashWords finds it by notes query
+    WordService.deleteWord(wordWithNotes.id);
+    const trashResults = WordService.getTrashWords({ search: 'mnemonic' });
+    expect(trashResults).toHaveLength(1);
+    expect(trashResults[0].id).toBe(wordWithNotes.id);
+
+    // 3. Verify non-matching query returns empty
+    const noResults = WordService.getTrashWords({ search: 'nonexistent-query' });
+    expect(noResults).toHaveLength(0);
+  });
+
   it('should populate accurate folderIds in getWords across all filter modes', () => {
     const folderA = FolderService.createFolder('Folder A', '#3b82f6');
     const folderB = FolderService.createFolder('Folder B', '#10b981');

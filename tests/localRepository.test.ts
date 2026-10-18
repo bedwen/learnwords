@@ -313,6 +313,36 @@ describe('LocalRepository & Autonomous Client-Side Storage', () => {
       expect(sortedByWordAsc[2].word).toBe('banana');
     });
 
+    it('filters words by search query matching notes in getWords and getTrashWords', async () => {
+      const wordA = await repo.createWord({
+        word: 'serendipity',
+        meaning: 'pleasant surprise',
+        level: 'B2',
+        notes: 'A useful mnemonic for accidental discoveries',
+      });
+      await repo.createWord({
+        word: 'ephemeral',
+        meaning: 'short-lived',
+        level: 'C1',
+        notes: 'Fleeting moments',
+      });
+
+      // 1. Search in active words by query matching notes only
+      const results = await repo.getWords({ search: 'mnemonic' });
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe(wordA.id);
+
+      // 2. Soft-delete wordA and verify getTrashWords searches notes
+      await repo.deleteWord(wordA.id);
+
+      const trashResults = await repo.getTrashWords({ search: 'mnemonic' });
+      expect(trashResults).toHaveLength(1);
+      expect(trashResults[0].id).toBe(wordA.id);
+
+      const emptyTrashResults = await repo.getTrashWords({ search: 'nonexistent-query' });
+      expect(emptyTrashResults).toHaveLength(0);
+    });
+
     it('batch updates CEFR level and batch deletes words', async () => {
       const w1 = await repo.createWord({ word: 'run', meaning: 'move fast', level: 'A1' });
       const w2 = await repo.createWord({ word: 'walk', meaning: 'move slow', level: 'A1' });

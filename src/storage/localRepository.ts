@@ -288,11 +288,12 @@ export class LocalRepository {
         if (!folderIds.includes(options.folderId)) continue;
       }
 
-      // Search filter (word or meaning)
+      // Search filter (word, meaning, or notes)
       if (searchLower) {
         const matchesWord = word.word.toLowerCase().includes(searchLower);
         const matchesMeaning = word.meaning.toLowerCase().includes(searchLower);
-        if (!matchesWord && !matchesMeaning) continue;
+        const matchesNotes = word.notes ? word.notes.toLowerCase().includes(searchLower) : false;
+        if (!matchesWord && !matchesMeaning && !matchesNotes) continue;
       }
 
       // Level filter
@@ -498,7 +499,10 @@ export class LocalRepository {
     if (filters?.search) {
       const q = filters.search.toLowerCase();
       trashWords = trashWords.filter(
-        (w) => w.word.toLowerCase().includes(q) || w.meaning.toLowerCase().includes(q)
+        (w) =>
+          w.word.toLowerCase().includes(q) ||
+          w.meaning.toLowerCase().includes(q) ||
+          (w.notes ? w.notes.toLowerCase().includes(q) : false)
       );
     }
 
