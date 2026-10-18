@@ -162,6 +162,55 @@ describe('Word Trash Bin Feature (D033)', () => {
       expect(stateAfterRestore.next_review).toBe(stateBeforeDelete.next_review);
     });
 
+    it('soft-deleting a word and restoring it via restoreWord preserves all original folderIds', () => {
+      const folder1 = FolderService.createFolder('Grammar', '#3b82f6');
+      const folder2 = FolderService.createFolder('Idioms', '#10b981');
+      const word = WordService.createWord({
+        word: 'serendipity',
+        meaning: 'pleasant surprise',
+        level: 'B2',
+        folderIds: [folder1.id, folder2.id],
+      });
+
+      // Confirm initial folder associations
+      const initial = WordService.getWordById(word.id);
+      expect(initial?.folderIds).toEqual(expect.arrayContaining([folder1.id, folder2.id]));
+      expect(initial?.folderIds).toHaveLength(2);
+      expect(count('SELECT COUNT(*) as count FROM word_folders WHERE word_id = ?', word.id)).toBe(2);
+
+      // Verify active folder counts
+      const foldersBefore = FolderService.listFolders();
+      expect(foldersBefore.folders.find((f) => f.id === folder1.id)?.wordCount).toBe(1);
+
+      // Soft delete
+      expect(WordService.deleteWord(word.id)).toBe(true);
+      expect(WordService.getTrashCount()).toBe(1);
+
+      // Word is hidden from active queries
+      expect(WordService.getWordById(word.id)).toBeNull();
+
+      // Active folder word count drops to 0 because soft-deleted words are filtered out
+      const foldersDuring = FolderService.listFolders();
+      expect(foldersDuring.folders.find((f) => f.id === folder1.id)?.wordCount).toBe(0);
+
+      // Junction records in word_folders are preserved
+      expect(count('SELECT COUNT(*) as count FROM word_folders WHERE word_id = ?', word.id)).toBe(2);
+
+      // Restore word
+      expect(WordService.restoreWord(word.id)).toBe(true);
+      expect(WordService.getTrashCount()).toBe(0);
+
+      // Verify restored word retains all original folder memberships
+      const restored = WordService.getWordById(word.id);
+      expect(restored).not.toBeNull();
+      expect(restored?.folderIds).toEqual(expect.arrayContaining([folder1.id, folder2.id]));
+      expect(restored?.folderIds).toHaveLength(2);
+
+      // Folder word count is restored
+      const foldersAfter = FolderService.listFolders();
+      expect(foldersAfter.folders.find((f) => f.id === folder1.id)?.wordCount).toBe(1);
+    });
+
     it('returns false when trying to restore a non-deleted or non-existent word', () => {
       const word = WordService.createWord({ word: 'active', meaning: 'in use', level: 'A1' });
       // Word is active (deleted_at is null), restoring should return false
@@ -184,9 +233,10 @@ describe('Word Trash Bin Feature (D033)', () => {
       expect(count('SELECT COUNT(*) as count FROM review_history WHERE word_id = ?', word.id)).toBe(1);
       expect(count('SELECT COUNT(*) as count FROM word_folders WHERE word_id = ?', word.id)).toBe(1);
 
-      // Soft delete first
+      // Soft delete first: word_folders junction row is preserved
       WordService.deleteWord(word.id);
       expect(WordService.getTrashCount()).toBe(1);
+      expect(count('SELECT COUNT(*) as count FROM word_folders WHERE word_id = ?', word.id)).toBe(1);
 
       // Permanent purge
       const purged = WordService.permanentDeleteWord(word.id);
@@ -198,6 +248,7 @@ describe('Word Trash Bin Feature (D033)', () => {
       expect(count('SELECT COUNT(*) as count FROM learning_states WHERE word_id = ?', word.id)).toBe(0);
       expect(count('SELECT COUNT(*) as count FROM review_history WHERE word_id = ?', word.id)).toBe(0);
       expect(count('SELECT COUNT(*) as count FROM word_folders WHERE word_id = ?', word.id)).toBe(0);
+
       // Folder itself remains intact
       expect(count('SELECT COUNT(*) as count FROM folders WHERE id = ?', folder.id)).toBe(1);
     });
@@ -228,6 +279,72 @@ describe('Word Trash Bin Feature (D033)', () => {
       expect(restored2).not.toBeNull();
       expect(restored1?.learning_state.mastery).toBe(expectedMastery1);
       expect(restored2?.learning_state.mastery).toBe(expectedMastery2);
+    });
+
+    it('batchDeleteWords soft-deletes words into trash bin and batchRestoreWords restores them with folders intact', () => {
+      const folder = FolderService.createFolder('Travel', '#3b82f6');
+      const w1 = WordService.createWord({
+        word: 'luggage',
+        meaning: 'bags and suitcases',
+        level: 'A2',
+        folderIds: [folder.id],
+      });
+      const w2 = WordService.createWord({
+        word: 'itinerary',
+        meaning: 'planned route',
+        level: 'B1',
+        folderIds: [folder.id],
+      });
+      const w3 = WordService.createWord({
+        word: 'passport',
+        meaning: 'travel document',
+        level: 'A1',
+      });
+
+      expect(WordService.getTrashCount()).toBe(0);
+      expect(WordService.getWords()).toHaveLength(3);
+      expect(FolderService.getFolderById(folder.id)?.wordCount).toBe(2);
+
+      // Batch soft-delete w1 and w2
+      const deletedCount = WordService.batchDeleteWords([w1.id, w2.id]);
+      expect(deletedCount).toBe(2);
+
+      // Verify words are in trash bin (trash count incremented)
+      expect(WordService.getTrashCount()).toBe(2);
+      expect(WordService.getWords()).toHaveLength(1);
+      expect(WordService.getWordById(w1.id)).toBeNull();
+      expect(WordService.getWordById(w2.id)).toBeNull();
+
+      // Folder word count drops to 0 because active queries filter soft-deleted words
+      expect(FolderService.getFolderById(folder.id)?.wordCount).toBe(0);
+
+      // Words still physically exist with deleted_at set
+      expect(count('SELECT COUNT(*) as count FROM words WHERE id IN (?, ?)', w1.id, w2.id)).toBe(2);
+      expect(count('SELECT COUNT(*) as count FROM words WHERE id IN (?, ?) AND deleted_at IS NOT NULL', w1.id, w2.id)).toBe(2);
+
+      // word_folders rows are preserved
+      expect(count('SELECT COUNT(*) as count FROM word_folders WHERE word_id IN (?, ?)', w1.id, w2.id)).toBe(2);
+
+      // Trash list includes both words
+      const trashList = WordService.getTrashWords();
+      expect(trashList).toHaveLength(2);
+      expect(trashList.map((w) => w.id)).toEqual(expect.arrayContaining([w1.id, w2.id]));
+
+      // Batch restore words from trash
+      const restoredCount = WordService.batchRestoreWords([w1.id, w2.id]);
+      expect(restoredCount).toBe(2);
+      expect(WordService.getTrashCount()).toBe(0);
+
+      // Active queries return restored words with folderIds intact
+      const restored1 = WordService.getWordById(w1.id);
+      const restored2 = WordService.getWordById(w2.id);
+      expect(restored1).not.toBeNull();
+      expect(restored2).not.toBeNull();
+      expect(restored1?.folderIds).toEqual([folder.id]);
+      expect(restored2?.folderIds).toEqual([folder.id]);
+
+      // Folder word count is restored
+      expect(FolderService.getFolderById(folder.id)?.wordCount).toBe(2);
     });
 
     it('batch permanently deletes multiple words and cleans up all related records', () => {

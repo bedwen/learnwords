@@ -111,7 +111,7 @@ describe('WordService batch operations', () => {
   });
 
   describe('batchDeleteWords', () => {
-    it('deletes the specified words and cascades related rows', () => {
+    it('soft-deletes the specified words into trash and preserves related rows for recovery', () => {
       createFolder('f1');
       const a = WordService.createWord({ word: 'a', meaning: 'a', level: 'A1' });
       const b = WordService.createWord({ word: 'b', meaning: 'b', level: 'A1' });
@@ -129,9 +129,11 @@ describe('WordService batch operations', () => {
       expect(WordService.getWordById(a.id)).toBeNull();
       expect(WordService.getWordById(b.id)).toBeNull();
       expect(WordService.getWordById(c.id)).not.toBeNull();
-      expect(count(`SELECT COUNT(*) as count FROM learning_states`)).toBe(1);
-      expect(count(`SELECT COUNT(*) as count FROM review_history`)).toBe(1);
-      expect(count(`SELECT COUNT(*) as count FROM word_folders`)).toBe(1);
+      expect(WordService.getTrashCount()).toBe(2);
+      expect(count(`SELECT COUNT(*) as count FROM words WHERE deleted_at IS NULL`)).toBe(1);
+      expect(count(`SELECT COUNT(*) as count FROM learning_states`)).toBe(3);
+      expect(count(`SELECT COUNT(*) as count FROM review_history`)).toBe(3);
+      expect(count(`SELECT COUNT(*) as count FROM word_folders`)).toBe(3);
       expect(count(`SELECT COUNT(*) as count FROM folders`)).toBe(1);
     });
 
@@ -141,7 +143,8 @@ describe('WordService batch operations', () => {
       const deleted = WordService.batchDeleteWords([a.id, a.id, 'missing-1', 'missing-2']);
 
       expect(deleted).toBe(1);
-      expect(count(`SELECT COUNT(*) as count FROM words`)).toBe(0);
+      expect(count(`SELECT COUNT(*) as count FROM words WHERE deleted_at IS NULL`)).toBe(0);
+      expect(WordService.getTrashCount()).toBe(1);
     });
 
     it('returns 0 for an empty array', () => {

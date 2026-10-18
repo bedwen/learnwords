@@ -297,7 +297,7 @@ describe('FolderService', () => {
       expect(FolderService.listFolders().ungroupedCount).toBe(0);
     });
 
-    it('should cascade-delete word_folders when a word is deleted via WordService', () => {
+    it('should cascade-delete word_folders when a word is permanently deleted via WordService', () => {
       const folder = FolderService.createFolder('Academic', '#8b5cf6');
       const word = WordService.createWord({
         word: 'ephemeral',
@@ -308,17 +308,26 @@ describe('FolderService', () => {
 
       expect(FolderService.getFolderById(folder.id)?.wordCount).toBe(1);
 
-      // Delete the word
-      const deleted = WordService.deleteWord(word.id);
-      expect(deleted).toBe(true);
+      // Soft delete: folder wordCount drops to 0, but junction record is preserved in trash
+      const softDeleted = WordService.deleteWord(word.id);
+      expect(softDeleted).toBe(true);
+      expect(FolderService.getFolderById(folder.id)?.wordCount).toBe(0);
+      const junctionBeforePurge = (globalThis.__TEST_DB__.prepare(
+        'SELECT COUNT(*) as count FROM word_folders WHERE word_id = ?'
+      ).get(word.id) as { count: number }).count;
+      expect(junctionBeforePurge).toBe(1);
 
-      // Junction records should be removed
+      // Permanent purge: cascade-deletes word_folders via foreign key
+      const permanentlyDeleted = WordService.permanentDeleteWord(word.id);
+      expect(permanentlyDeleted).toBe(true);
+
+      // Junction records should now be removed by CASCADE
       const junctionCount = (globalThis.__TEST_DB__.prepare(
         'SELECT COUNT(*) as count FROM word_folders WHERE word_id = ?'
       ).get(word.id) as { count: number }).count;
       expect(junctionCount).toBe(0);
 
-      // Folder still exists but wordCount is now 0
+      // Folder still exists but wordCount remains 0
       const updatedFolder = FolderService.getFolderById(folder.id);
       expect(updatedFolder).not.toBeNull();
       expect(updatedFolder?.wordCount).toBe(0);

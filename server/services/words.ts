@@ -241,22 +241,14 @@ export class WordService {
   }
 
   /**
-   * Soft delete a word: marks deleted_at and updated_at with UTC ISO timestamp
-   * and unlinks junction records in word_folders.
+   * Soft delete a word: marks deleted_at and updated_at with UTC ISO timestamp.
+   * Folder memberships are preserved so they are restored if the word is un-deleted.
    */
   static deleteWord(id: string): boolean {
     const db = getDatabase();
     const now = new Date().toISOString();
-    let changes = 0;
-    const tx = db.transaction(() => {
-      const result = db.prepare(`UPDATE words SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now, now, id);
-      changes = result.changes;
-      if (changes > 0) {
-        db.prepare('DELETE FROM word_folders WHERE word_id = ?').run(id);
-      }
-    });
-    tx();
-    return changes > 0;
+    const result = db.prepare(`UPDATE words SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`).run(now, now, id);
+    return result.changes > 0;
   }
 
   /**
@@ -434,21 +426,23 @@ export class WordService {
   }
 
   /**
-   * Delete multiple words. Cascades remove learning states, review history
-   * and folder links. Non-existent IDs are ignored.
-   * Returns the number of words deleted.
+   * Bulk soft-delete words into the trash bin.
+   * Folder memberships and learning states are preserved for restoration.
+   * Non-existent IDs are ignored.
+   * Returns the number of words soft-deleted.
    */
   static batchDeleteWords(wordIds: string[]): number {
     const ids = Array.from(new Set(wordIds));
     if (ids.length === 0) return 0;
 
     const db = getDatabase();
-    const stmt = db.prepare(`DELETE FROM words WHERE id = ?`);
+    const now = new Date().toISOString();
+    const stmt = db.prepare(`UPDATE words SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL`);
 
     const transaction = db.transaction((idList: string[]) => {
       let count = 0;
       for (const id of idList) {
-        count += stmt.run(id).changes;
+        count += stmt.run(now, now, id).changes;
       }
       return count;
     });
