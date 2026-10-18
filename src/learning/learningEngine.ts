@@ -53,13 +53,19 @@ export class LearningEngine {
 
     // 2. Calculate Mastery Progression / Regression
     if (rating === 'again') {
-      // Mastery Regression
-      if (currentState.mastery === 1 || currentState.mastery === 2) {
+      // Mastery Regression / Transition from New
+      if (currentState.mastery === 0) {
+        newMastery = 1; // New -> Learning
+      } else if (currentState.mastery === 1 || currentState.mastery === 2) {
         newMastery = 1; // Learning, Familiar -> Learning
       } else if (currentState.mastery === 3) {
         newMastery = 2; // Strong -> Familiar
       } else if (currentState.mastery === 4) {
         newMastery = 3; // Mastered -> Strong
+      }
+    } else if (rating === 'hard') {
+      if (currentState.mastery === 0) {
+        newMastery = 1; // New -> Learning
       }
     } else if (rating === 'good' || rating === 'easy') {
       // Progression
@@ -83,7 +89,7 @@ export class LearningEngine {
     // 4. Calculate next_review date
     const intervalDays = INTERVAL_STEPS_DAYS[newIntervalStep];
     const nextReviewDate = new Date(now);
-    nextReviewDate.setDate(nextReviewDate.getDate() + intervalDays);
+    nextReviewDate.setUTCDate(nextReviewDate.getUTCDate() + intervalDays);
     
     return {
       mastery: newMastery,

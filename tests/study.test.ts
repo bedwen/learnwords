@@ -53,4 +53,31 @@ describe('StudyService', () => {
     const historyCount = globalThis.__TEST_DB__.prepare('SELECT COUNT(*) as count FROM review_history').get() as any;
     expect(historyCount.count).toBe(1);
   });
+
+  it('should remove new word from immediate queue after review with again or hard', () => {
+    const wordAgain = WordService.createWord({ word: 'againWord', meaning: 'meaning1', level: 'B1' });
+    const wordHard = WordService.createWord({ word: 'hardWord', meaning: 'meaning2', level: 'B1' });
+
+    // Both words are initially present in the study queue as new words (mastery = 0)
+    let queue = StudyService.getStudyQueue(10);
+    const initialIds = queue.map((w) => w.id);
+    expect(initialIds).toContain(wordAgain.id);
+    expect(initialIds).toContain(wordHard.id);
+
+    // Review wordAgain with 'again'
+    const reviewedAgain = StudyService.processReview(wordAgain.id, 'again');
+    expect(reviewedAgain.learning_state.mastery).toBe(1);
+    expect(reviewedAgain.learning_state.interval_step).toBe(0);
+
+    // Review wordHard with 'hard'
+    const reviewedHard = StudyService.processReview(wordHard.id, 'hard');
+    expect(reviewedHard.learning_state.mastery).toBe(1);
+    expect(reviewedHard.learning_state.interval_step).toBe(0);
+
+    // Immediate study queue must no longer contain either word
+    queue = StudyService.getStudyQueue(10);
+    const updatedIds = queue.map((w) => w.id);
+    expect(updatedIds).not.toContain(wordAgain.id);
+    expect(updatedIds).not.toContain(wordHard.id);
+  });
 });

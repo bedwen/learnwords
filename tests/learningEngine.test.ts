@@ -46,6 +46,20 @@ describe('LearningEngine', () => {
       expect(result.interval_step).toBe(0);
     });
 
+    it('transitions New word to Learning (1) with 1 day interval on Again', () => {
+      const result = LearningEngine.processReview(getMockState(0, 0), [], 'again', now);
+      expect(result.mastery).toBe(1);
+      expect(result.interval_step).toBe(0);
+      expect(result.next_review).toBe('2025-01-02T12:00:00.000Z');
+    });
+
+    it('transitions New word to Learning (1) with 1 day interval on Hard', () => {
+      const result = LearningEngine.processReview(getMockState(0, 0), [], 'hard', now);
+      expect(result.mastery).toBe(1);
+      expect(result.interval_step).toBe(0);
+      expect(result.next_review).toBe('2025-01-02T12:00:00.000Z');
+    });
+
     it('does not exceed max interval step 7', () => {
       const result = LearningEngine.processReview(getMockState(3, 7), [], 'good', now);
       expect(result.interval_step).toBe(7);
