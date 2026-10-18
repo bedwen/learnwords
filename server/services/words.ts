@@ -50,9 +50,10 @@ export class WordService {
 
     // Folder filtering
     if (options?.folderId === 'ungrouped') {
-      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id) AND w.deleted_at IS NULL`;
+      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf JOIN folders f ON wf.folder_id = f.id WHERE wf.word_id = w.id AND f.deleted_at IS NULL) AND w.deleted_at IS NULL`;
     } else if (options?.folderId) {
       query += ` JOIN word_folders wf ON w.id = wf.word_id AND wf.folder_id = ?`;
+      query += ` JOIN folders f ON wf.folder_id = f.id AND f.deleted_at IS NULL`;
       params.push(options.folderId);
       query += ` WHERE w.deleted_at IS NULL`;
     } else {
@@ -91,8 +92,12 @@ export class WordService {
     query += ` ORDER BY ${sortCol} ${order}`;
 
     const rows = db.prepare(query).all(...params) as any[];
+    const folderMap = FolderService.getWordFolderIdsMap(rows.map(r => r.id));
 
-    return rows.map(row => this.mapRowToWordWithState(row));
+    return rows.map(row => ({
+      ...this.mapRowToWordWithState(row),
+      folderIds: folderMap.get(row.id) || [],
+    }));
   }
 
   /**
@@ -296,12 +301,12 @@ export class WordService {
     query += ' ORDER BY w.deleted_at DESC';
 
     const rows = db.prepare(query).all(...params) as any[];
+    const folderMap = FolderService.getWordFolderIdsMap(rows.map((r) => r.id));
 
-    return rows.map((row) => {
-      const word = this.mapRowToWordWithState(row);
-      const folderIds = FolderService.getWordFolderIds(row.id);
-      return { ...word, folderIds };
-    });
+    return rows.map((row) => ({
+      ...this.mapRowToWordWithState(row),
+      folderIds: folderMap.get(row.id) || [],
+    }));
   }
 
   /**

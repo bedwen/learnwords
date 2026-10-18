@@ -164,12 +164,49 @@ export class FolderService {
   }
 
   /**
-   * Get folder IDs for a given word.
+   * Get folder IDs for a given word, excluding soft-deleted folders.
    */
   static getWordFolderIds(wordId: string): string[] {
     const db = getDatabase();
-    const rows = db.prepare('SELECT folder_id FROM word_folders WHERE word_id = ?').all(wordId) as { folder_id: string }[];
+    const rows = db.prepare(`
+      SELECT wf.folder_id
+      FROM word_folders wf
+      JOIN folders f ON wf.folder_id = f.id
+      WHERE wf.word_id = ? AND f.deleted_at IS NULL
+    `).all(wordId) as { folder_id: string }[];
     return rows.map(r => r.folder_id);
+  }
+
+  /**
+   * Batch-fetch folder IDs for a list of words (or all words if omitted) in a single query.
+   * Excludes soft-deleted folders.
+   */
+  static getWordFolderIdsMap(wordIds?: string[]): Map<string, string[]> {
+    const folderMap = new Map<string, string[]>();
+    if (wordIds && wordIds.length === 0) {
+      return folderMap;
+    }
+
+    const db = getDatabase();
+    const allowedIds = wordIds ? new Set(wordIds) : null;
+    const rows = db.prepare(`
+      SELECT wf.word_id, wf.folder_id
+      FROM word_folders wf
+      JOIN folders f ON wf.folder_id = f.id
+      WHERE f.deleted_at IS NULL
+    `).all() as { word_id: string; folder_id: string }[];
+
+    for (const row of rows) {
+      if (allowedIds && !allowedIds.has(row.word_id)) continue;
+      const existing = folderMap.get(row.word_id);
+      if (existing) {
+        existing.push(row.folder_id);
+      } else {
+        folderMap.set(row.word_id, [row.folder_id]);
+      }
+    }
+
+    return folderMap;
   }
 
   /**

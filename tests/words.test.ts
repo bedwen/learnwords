@@ -3,6 +3,8 @@ import Database from 'better-sqlite3';
 import { initializeSchema } from '../server/db/schema';
 import { createTestDatabase, getDatabase, closeDatabase } from '../server/db/connection';
 import { WordService } from '../server/services/words';
+import { FolderService } from '../server/services/folders';
+import { StudyService } from '../server/services/study';
 import fs from 'fs';
 import path from 'path';
 
@@ -105,5 +107,136 @@ describe('WordService', () => {
     const both = WordService.getWords({ search: 'app', level: 'B1' });
     expect(both).toHaveLength(1);
     expect(both[0].word).toBe('apple');
+  });
+
+  it('should populate accurate folderIds in getWords across all filter modes', () => {
+    const folderA = FolderService.createFolder('Folder A', '#3b82f6');
+    const folderB = FolderService.createFolder('Folder B', '#10b981');
+
+    const wMulti = WordService.createWord({
+      word: 'eloquent',
+      meaning: 'fluent or persuasive',
+      level: 'C1',
+      folderIds: [folderA.id, folderB.id],
+    });
+    const wSingle = WordService.createWord({
+      word: 'pragmatic',
+      meaning: 'practical',
+      level: 'B2',
+      folderIds: [folderA.id],
+    });
+    const wUngrouped = WordService.createWord({
+      word: 'candid',
+      meaning: 'truthful and straightforward',
+      level: 'B2',
+    });
+
+    // 1. All words query
+    const allWords = WordService.getWords();
+    const multiFromAll = allWords.find((w) => w.id === wMulti.id);
+    const singleFromAll = allWords.find((w) => w.id === wSingle.id);
+    const ungroupedFromAll = allWords.find((w) => w.id === wUngrouped.id);
+
+    expect(multiFromAll?.folderIds).toEqual(expect.arrayContaining([folderA.id, folderB.id]));
+    expect(multiFromAll?.folderIds).toHaveLength(2);
+    expect(singleFromAll?.folderIds).toEqual([folderA.id]);
+    expect(ungroupedFromAll?.folderIds).toEqual([]);
+
+    // 2. Filtered by folderA — wMulti must still include BOTH folderA and folderB in folderIds
+    const inFolderA = WordService.getWords({ folderId: folderA.id });
+    expect(inFolderA).toHaveLength(2);
+    const multiFromFolderA = inFolderA.find((w) => w.id === wMulti.id);
+    expect(multiFromFolderA?.folderIds).toEqual(expect.arrayContaining([folderA.id, folderB.id]));
+    expect(multiFromFolderA?.folderIds).toHaveLength(2);
+
+    // 3. Filtered by ungrouped
+    const ungroupedWords = WordService.getWords({ folderId: 'ungrouped' });
+    expect(ungroupedWords).toHaveLength(1);
+    expect(ungroupedWords[0].id).toBe(wUngrouped.id);
+    expect(ungroupedWords[0].folderIds).toEqual([]);
+  });
+
+  it('should preserve folder memberships when editing a word loaded from getWords (Desktop edit flow)', () => {
+    const folder1 = FolderService.createFolder('Academic', '#3b82f6');
+    const folder2 = FolderService.createFolder('Business', '#10b981');
+    const folder3 = FolderService.createFolder('Daily', '#f59e0b');
+
+    const created = WordService.createWord({
+      word: 'substantiate',
+      meaning: 'provide evidence to support',
+      level: 'C1',
+      folderIds: [folder1.id, folder2.id],
+    });
+
+    // Simulate Words.tsx fetching words in folder1 via getWords and passing the item to WordForm
+    const wordsInFolder1 = WordService.getWords({ folderId: folder1.id });
+    const editingWord = wordsInFolder1.find((w) => w.id === created.id)!;
+    expect(editingWord).toBeDefined();
+    expect(editingWord.folderIds).toEqual(expect.arrayContaining([folder1.id, folder2.id]));
+
+    // Simulate WordForm initializing selectedFolderIds from initialData.folderIds and saving an updated meaning
+    const initialSelectedFolderIds = editingWord.folderIds || [];
+    const updated = WordService.updateWord(editingWord.id, {
+      word: editingWord.word,
+      meaning: 'provide evidence to support or prove the truth of',
+      level: editingWord.level,
+      folderIds: initialSelectedFolderIds,
+    });
+
+    expect(updated?.meaning).toBe('provide evidence to support or prove the truth of');
+    expect(updated?.folderIds).toEqual(expect.arrayContaining([folder1.id, folder2.id]));
+    expect(updated?.folderIds).toHaveLength(2);
+
+    // Now simulate user toggling folder2 off and folder3 on in WordForm
+    const modifiedFolderIds = initialSelectedFolderIds
+      .filter((id) => id !== folder2.id)
+      .concat(folder3.id);
+    const updatedFolders = WordService.updateWord(editingWord.id, {
+      folderIds: modifiedFolderIds,
+    });
+
+    expect(updatedFolders?.folderIds).toEqual(expect.arrayContaining([folder1.id, folder3.id]));
+    expect(updatedFolders?.folderIds).not.toContain(folder2.id);
+  });
+
+  it('should exclude soft-deleted folders when resolving folderIds and ungrouped filtering', () => {
+    const activeFolder = FolderService.createFolder('Active Folder', '#3b82f6');
+    const deletedFolder = FolderService.createFolder('Deleted Folder', '#ef4444');
+
+    const wordBoth = WordService.createWord({
+      word: 'resilient',
+      meaning: 'able to recover',
+      level: 'B2',
+      folderIds: [activeFolder.id, deletedFolder.id],
+    });
+    const wordOnlyDeleted = WordService.createWord({
+      word: 'orphan',
+      meaning: 'only in soft-deleted folder',
+      level: 'B1',
+      folderIds: [deletedFolder.id],
+    });
+
+    // Simulate a soft-deleted folder where word_folders junction rows remain (e.g. from sync)
+    globalThis.__TEST_DB__
+      .prepare(`UPDATE folders SET deleted_at = datetime('now') WHERE id = ?`)
+      .run(deletedFolder.id);
+
+    expect(FolderService.getWordFolderIds(wordBoth.id)).toEqual([activeFolder.id]);
+    expect(FolderService.getWordFolderIds(wordOnlyDeleted.id)).toEqual([]);
+
+    const allWords = WordService.getWords();
+    expect(allWords.find((w) => w.id === wordBoth.id)?.folderIds).toEqual([activeFolder.id]);
+    expect(allWords.find((w) => w.id === wordOnlyDeleted.id)?.folderIds).toEqual([]);
+
+    // wordOnlyDeleted should now appear in ungrouped words and ungrouped study queue
+    const ungroupedWords = WordService.getWords({ folderId: 'ungrouped' });
+    expect(ungroupedWords.map((w) => w.id)).toEqual([wordOnlyDeleted.id]);
+
+    const ungroupedQueue = StudyService.getStudyQueue(50, 'ungrouped');
+    expect(ungroupedQueue.map((w) => w.id)).toEqual([wordOnlyDeleted.id]);
+
+    // Querying the soft-deleted folder directly should return no words
+    expect(WordService.getWords({ folderId: deletedFolder.id })).toEqual([]);
+    expect(StudyService.getStudyQueue(50, deletedFolder.id)).toEqual([]);
   });
 });

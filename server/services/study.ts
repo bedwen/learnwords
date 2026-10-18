@@ -39,11 +39,12 @@ export class StudyService {
     const params: any[] = [];
 
     if (folderId === 'ungrouped') {
-      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id)`;
+      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf JOIN folders f ON wf.folder_id = f.id WHERE wf.word_id = w.id AND f.deleted_at IS NULL)`;
       query += ` AND w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
       params.push(now);
     } else if (folderId) {
       query += ` JOIN word_folders wf ON w.id = wf.word_id AND wf.folder_id = ?`;
+      query += ` JOIN folders f ON wf.folder_id = f.id AND f.deleted_at IS NULL`;
       params.push(folderId);
       query += ` WHERE w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
       params.push(now);
@@ -65,9 +66,11 @@ export class StudyService {
     params.push(limit);
 
     const rows = db.prepare(query).all(...params) as any[];
+    const folderMap = FolderService.getWordFolderIdsMap(rows.map(r => r.id));
 
     return rows.map(row => ({
       id: row.id,
+      sync_id: row.sync_id || row.id,
       word: row.word,
       meaning: row.meaning,
       level: row.level,
@@ -77,6 +80,7 @@ export class StudyService {
       notes: row.notes,
       created_at: row.created_at,
       updated_at: row.updated_at,
+      deleted_at: row.deleted_at ?? null,
       learning_state: {
         id: row.ls_id,
         word_id: row.ls_word_id,
@@ -89,7 +93,7 @@ export class StudyService {
         wrong_count: row.ls_wrong_count,
         consecutive_correct: row.ls_consecutive_correct
       },
-      folderIds: FolderService.getWordFolderIds(row.id),
+      folderIds: folderMap.get(row.id) || [],
     }));
   }
 
