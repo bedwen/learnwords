@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import crypto from 'crypto';
 import { nanoid } from 'nanoid';
 import Papa from 'papaparse';
 
@@ -68,9 +69,9 @@ export function importAllData(db: Database.Database, data: ExportData): void {
 
       // 1. Words
       if (words.length > 0) {
-        const insertWord = db.prepare(`INSERT INTO words (id, word, meaning, level, part_of_speech, example_sentence, example_translation, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const insertWord = db.prepare(`INSERT INTO words (id, sync_id, word, meaning, level, part_of_speech, example_sentence, example_translation, notes, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const w of words) {
-          insertWord.run(w.id, w.word, w.meaning, w.level, w.part_of_speech ?? null, w.example_sentence ?? null, w.example_translation ?? null, w.notes ?? null, w.created_at, w.updated_at);
+          insertWord.run(w.id, w.sync_id ?? null, w.word, w.meaning, w.level, w.part_of_speech ?? null, w.example_sentence ?? null, w.example_translation ?? null, w.notes ?? null, w.created_at, w.updated_at, w.deleted_at ?? null);
         }
       }
 
@@ -84,17 +85,17 @@ export function importAllData(db: Database.Database, data: ExportData): void {
 
       // 3. Review History
       if (review_history.length > 0) {
-        const insertRh = db.prepare(`INSERT INTO review_history (id, word_id, rating, mastery_before, mastery_after, interval_step_before, interval_step_after, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+        const insertRh = db.prepare(`INSERT INTO review_history (id, sync_id, word_id, rating, mastery_before, mastery_after, interval_step_before, interval_step_after, reviewed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const rh of review_history) {
-          insertRh.run(rh.id, rh.word_id, rh.rating, rh.mastery_before, rh.mastery_after, rh.interval_step_before, rh.interval_step_after, rh.reviewed_at);
+          insertRh.run(rh.id, rh.sync_id ?? null, rh.word_id, rh.rating, rh.mastery_before, rh.mastery_after, rh.interval_step_before, rh.interval_step_after, rh.reviewed_at);
         }
       }
 
       // 4. Folders
       if (folders.length > 0) {
-        const insertFolder = db.prepare(`INSERT INTO folders (id, name, color, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`);
+        const insertFolder = db.prepare(`INSERT INTO folders (id, sync_id, name, color, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)`);
         for (const f of folders) {
-          insertFolder.run(f.id, f.name, f.color ?? '#94a3b8', f.created_at, f.updated_at);
+          insertFolder.run(f.id, f.sync_id ?? null, f.name, f.color ?? '#94a3b8', f.created_at, f.updated_at, f.deleted_at ?? null);
         }
       }
 
@@ -251,10 +252,10 @@ export function importWordsCsv(db: Database.Database, csvContent: string): CsvIm
   const now = new Date().toISOString();
 
   const transaction = db.transaction(() => {
-    const checkStmt = db.prepare('SELECT id FROM words WHERE word = ? COLLATE NOCASE');
+    const checkStmt = db.prepare('SELECT id FROM words WHERE word = ? COLLATE NOCASE AND deleted_at IS NULL');
     const insertWord = db.prepare(`
-      INSERT INTO words (id, word, meaning, level, part_of_speech, example_sentence, example_translation, notes, created_at, updated_at) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO words (id, sync_id, word, meaning, level, part_of_speech, example_sentence, example_translation, notes, created_at, updated_at) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertLs = db.prepare(`
       INSERT INTO learning_states (id, word_id, mastery, interval_step, next_review, review_count, correct_count, wrong_count, consecutive_correct)
@@ -269,7 +270,8 @@ export function importWordsCsv(db: Database.Database, csvContent: string): CsvIm
       }
 
       const wordId = nanoid();
-      insertWord.run(wordId, r.word, r.meaning, r.level, r.pos, r.exSen, r.exTrans, r.notes, now, now);
+      const syncId = crypto.randomUUID();
+      insertWord.run(wordId, syncId, r.word, r.meaning, r.level, r.pos, r.exSen, r.exTrans, r.notes, now, now);
       
       const lsId = nanoid();
       insertLs.run(lsId, wordId, now);
@@ -291,10 +293,13 @@ export function exportWordsCsv(db: Database.Database, folderId?: string): string
   const params: any[] = [];
 
   if (folderId === 'ungrouped') {
-    query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id)`;
+    query += ` WHERE w.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM word_folders wf WHERE wf.word_id = w.id)`;
   } else if (folderId) {
     query += ` JOIN word_folders wf ON w.id = wf.word_id AND wf.folder_id = ?`;
+    query += ` WHERE w.deleted_at IS NULL`;
     params.push(folderId);
+  } else {
+    query += ` WHERE w.deleted_at IS NULL`;
   }
   
   query += ` ORDER BY w.word ASC`;
