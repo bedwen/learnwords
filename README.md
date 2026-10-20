@@ -70,9 +70,10 @@ Quickly organize study materials through dedicated creation workflows.
 
 ![Learning Statistics](./imagesforreadme/statistics.png)
 
-### Data Management & Backups
+### Data Management & Synchronization
 - **CSV Import & Export:** Bulk import words from spreadsheets with automated duplicate detection, and export filtered lists.
 - **Full JSON Backups:** Complete database snapshot backup and restore capability to ensure your learning progress is always safe.
+- **Local Network Sync (Experimental):** Direct LAN peer sync and conflict-free delta sync bundles are implemented to allow local device pairing over Wi-Fi without cloud dependencies. Note: This synchronization feature is currently experimental and has not yet been fully field-tested across physical devices.
 
 ![Data Management](./imagesforreadme/data_management.png)
 
