@@ -155,10 +155,10 @@ describe('Sentence Translation Practice', () => {
         example_translation: 'Antik kalintilar binlerce turist cekiyor.',
       });
 
-      // Promote Word 2 to mastery 1 with past next_review
+      // Promote Word 2 to sentence_mastery 1 with past sentence_next_review
       globalThis.__TEST_DB__.prepare(`
         UPDATE learning_states
-        SET mastery = 1, next_review = ?, interval_step = 1
+        SET sentence_mastery = 1, sentence_next_review = ?, sentence_interval_step = 1
         WHERE word_id = ?
       `).run(pastDate, dueWord.id);
 
@@ -192,9 +192,10 @@ describe('Sentence Translation Practice', () => {
         example_translation: 'O akici ve anlasilir bir konusmacidir.',
       });
 
-      const updated = StudyService.processReview(word.id, 'good');
+      const updated = StudyService.processReview(word.id, 'good', 'sentences');
 
-      expect(updated.learning_state.mastery).toBe(1);
+      expect(updated.learning_state.sentence_mastery).toBe(1);
+      expect(updated.learning_state.mastery).toBe(0);
       expect(updated.learning_state.review_count).toBe(1);
       expect(updated.learning_state.correct_count).toBe(1);
 
@@ -206,6 +207,56 @@ describe('Sentence Translation Practice', () => {
       expect(history[0].rating).toBe('good');
       expect(history[0].mastery_before).toBe(0);
       expect(history[0].mastery_after).toBe(1);
+    });
+
+    it('keeps folder sentences due in sentence mode even after all folder words are reviewed in words mode, and supports practiceAll', () => {
+      const folder = FolderService.createFolder('Science', '#8b5cf6');
+      const w1 = WordService.createWord({
+        word: 'hypothesis',
+        meaning: 'a proposed explanation',
+        level: 'B2',
+        example_sentence: 'The scientists tested their hypothesis.',
+        example_translation: 'Scientists tested the proposed explanation.',
+        folderIds: [folder.id],
+      });
+      const w2 = WordService.createWord({
+        word: 'empirical',
+        meaning: 'based on observation',
+        level: 'C1',
+        example_sentence: 'They gathered empirical evidence.',
+        example_translation: 'They collected observational evidence.',
+        folderIds: [folder.id],
+      });
+
+      // Review both words in 'words' mode so their flashcard next_review is in the future
+      StudyService.processReview(w1.id, 'good', 'words');
+      StudyService.processReview(w2.id, 'easy', 'words');
+
+      // Word flashcard queue for this folder is now empty
+      const dueWordQueue = StudyService.getStudyQueue(50, folder.id, 'words');
+      expect(dueWordQueue).toHaveLength(0);
+
+      // Sentence practice queue for the same folder MUST still contain both words!
+      const dueSentenceQueue = StudyService.getStudyQueue(50, folder.id, 'sentences');
+      expect(dueSentenceQueue).toHaveLength(2);
+
+      // Now review both in 'sentences' mode
+      const afterSentence1 = StudyService.processReview(w1.id, 'good', 'sentences');
+      expect(afterSentence1.learning_state.sentence_mastery).toBe(1);
+      expect(afterSentence1.learning_state.mastery).toBe(1); // untouched from earlier word review
+
+      StudyService.processReview(w2.id, 'good', 'sentences');
+
+      // Due sentence queue is now empty
+      expect(StudyService.getStudyQueue(50, folder.id, 'sentences')).toHaveLength(0);
+
+      // Calling with practiceAll = true returns both sentences for re-practice anytime
+      const practiceAllSentences = StudyService.getStudyQueue(50, folder.id, 'sentences', true);
+      expect(practiceAllSentences).toHaveLength(2);
+
+      // Calling with practiceAll = true in words mode also returns both words
+      const practiceAllWords = StudyService.getStudyQueue(50, folder.id, 'words', true);
+      expect(practiceAllWords).toHaveLength(2);
     });
   });
 
@@ -281,6 +332,39 @@ describe('Sentence Translation Practice', () => {
       const folderQueue = await repo.getStudyQueue(50, folder.id, 'sentences');
       expect(folderQueue).toHaveLength(1);
       expect(folderQueue[0].id).toBe(wordInFolder.id);
+    });
+
+    it('isolates word flashcard SRS from sentence practice SRS and supports practiceAll offline', async () => {
+      const folder = await repo.createFolder('Business', '#f59e0b');
+      const word = await repo.createWord({
+        word: 'negotiate',
+        meaning: 'obtain or bring about by discussion',
+        level: 'B2',
+        example_sentence: 'They agreed to negotiate a new contract.',
+        example_translation: 'Agreed to discuss terms for a new contract.',
+        folderIds: [folder.id],
+      });
+
+      // Review in words mode
+      await repo.processReview(word.id, 'good', 'words');
+      expect(await repo.getStudyQueue(50, folder.id, 'words')).toHaveLength(0);
+
+      // Still due in sentences mode!
+      const sentenceQueue = await repo.getStudyQueue(50, folder.id, 'sentences');
+      expect(sentenceQueue).toHaveLength(1);
+      expect(sentenceQueue[0].id).toBe(word.id);
+
+      // Review in sentences mode
+      const afterSentence = await repo.processReview(word.id, 'good', 'sentences');
+      expect(afterSentence.learning_state.sentence_mastery).toBe(1);
+      expect(afterSentence.learning_state.mastery).toBe(1);
+
+      // Now due sentence queue is empty
+      expect(await repo.getStudyQueue(50, folder.id, 'sentences')).toHaveLength(0);
+
+      // practiceAll returns the item in both modes
+      expect(await repo.getStudyQueue(50, folder.id, 'sentences', true)).toHaveLength(1);
+      expect(await repo.getStudyQueue(50, folder.id, 'words', true)).toHaveLength(1);
     });
   });
 

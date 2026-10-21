@@ -26,16 +26,20 @@ export function initializeSchema(db: Database.Database): void {
 
     -- Learning states table: current learning state per word (1:1)
     CREATE TABLE IF NOT EXISTS learning_states (
-      id                  TEXT PRIMARY KEY,
-      word_id             TEXT NOT NULL UNIQUE,
-      mastery             INTEGER NOT NULL DEFAULT 0,
-      interval_step       INTEGER NOT NULL DEFAULT 0,
-      next_review         DATETIME NOT NULL DEFAULT (datetime('now')),
-      last_reviewed       DATETIME,
-      review_count        INTEGER NOT NULL DEFAULT 0,
-      correct_count       INTEGER NOT NULL DEFAULT 0,
-      wrong_count         INTEGER NOT NULL DEFAULT 0,
-      consecutive_correct INTEGER NOT NULL DEFAULT 0,
+      id                     TEXT PRIMARY KEY,
+      word_id                TEXT NOT NULL UNIQUE,
+      mastery                INTEGER NOT NULL DEFAULT 0,
+      interval_step          INTEGER NOT NULL DEFAULT 0,
+      next_review            DATETIME NOT NULL DEFAULT (datetime('now')),
+      last_reviewed          DATETIME,
+      review_count           INTEGER NOT NULL DEFAULT 0,
+      correct_count          INTEGER NOT NULL DEFAULT 0,
+      wrong_count            INTEGER NOT NULL DEFAULT 0,
+      consecutive_correct    INTEGER NOT NULL DEFAULT 0,
+      sentence_mastery       INTEGER NOT NULL DEFAULT 0,
+      sentence_interval_step INTEGER NOT NULL DEFAULT 0,
+      sentence_next_review   DATETIME NOT NULL DEFAULT (datetime('now')),
+      sentence_last_reviewed DATETIME,
       FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
     );
 
@@ -142,6 +146,22 @@ function migrateColumns(db: Database.Database): void {
     for (const r of reviewsWithoutSync) {
       updateReviewSync.run(crypto.randomUUID(), r.id);
     }
+  }
+
+  // 4. learning_states table
+  const lsCols = (db.prepare('PRAGMA table_info(learning_states)').all() as { name: string }[]).map((c) => c.name);
+  if (!lsCols.includes('sentence_mastery')) {
+    db.exec('ALTER TABLE learning_states ADD COLUMN sentence_mastery INTEGER NOT NULL DEFAULT 0;');
+  }
+  if (!lsCols.includes('sentence_interval_step')) {
+    db.exec('ALTER TABLE learning_states ADD COLUMN sentence_interval_step INTEGER NOT NULL DEFAULT 0;');
+  }
+  if (!lsCols.includes('sentence_next_review')) {
+    db.exec('ALTER TABLE learning_states ADD COLUMN sentence_next_review DATETIME;');
+    db.exec("UPDATE learning_states SET sentence_next_review = datetime('now') WHERE sentence_next_review IS NULL;");
+  }
+  if (!lsCols.includes('sentence_last_reviewed')) {
+    db.exec('ALTER TABLE learning_states ADD COLUMN sentence_last_reviewed DATETIME;');
   }
 }
 

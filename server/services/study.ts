@@ -15,7 +15,12 @@ export class StudyService {
    * 
    * Optionally filtered by folder ID and study mode. Soft-deleted words are excluded.
    */
-  static getStudyQueue(limit = 50, folderId?: string, mode: StudyMode = 'words'): WordWithState[] {
+  static getStudyQueue(
+    limit = 50,
+    folderId?: string,
+    mode: StudyMode = 'words',
+    practiceAll = false
+  ): WordWithState[] {
     const db = getDatabase();
     const now = new Date().toISOString();
 
@@ -31,7 +36,11 @@ export class StudyService {
         ls.review_count as ls_review_count,
         ls.correct_count as ls_correct_count,
         ls.wrong_count as ls_wrong_count,
-        ls.consecutive_correct as ls_consecutive_correct
+        ls.consecutive_correct as ls_consecutive_correct,
+        ls.sentence_mastery as ls_sentence_mastery,
+        ls.sentence_interval_step as ls_sentence_interval_step,
+        ls.sentence_next_review as ls_sentence_next_review,
+        ls.sentence_last_reviewed as ls_sentence_last_reviewed
       FROM learning_states ls
       JOIN words w ON w.id = ls.word_id
     `;
@@ -39,30 +48,42 @@ export class StudyService {
     const params: any[] = [];
 
     if (folderId === 'ungrouped') {
-      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf JOIN folders f ON wf.folder_id = f.id WHERE wf.word_id = w.id AND f.deleted_at IS NULL)`;
-      query += ` AND w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
-      params.push(now);
+      query += ` WHERE NOT EXISTS (SELECT 1 FROM word_folders wf JOIN folders f ON wf.folder_id = f.id WHERE wf.word_id = w.id AND f.deleted_at IS NULL) AND w.deleted_at IS NULL`;
     } else if (folderId) {
       query += ` JOIN word_folders wf ON w.id = wf.word_id AND wf.folder_id = ?`;
       query += ` JOIN folders f ON wf.folder_id = f.id AND f.deleted_at IS NULL`;
       params.push(folderId);
-      query += ` WHERE w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
-      params.push(now);
+      query += ` WHERE w.deleted_at IS NULL`;
     } else {
-      query += ` WHERE w.deleted_at IS NULL AND (ls.next_review <= ? OR ls.mastery = 0)`;
-      params.push(now);
+      query += ` WHERE w.deleted_at IS NULL`;
+    }
+
+    if (!practiceAll) {
+      if (mode === 'sentences') {
+        query += ` AND (ls.sentence_next_review IS NULL OR ls.sentence_next_review <= ? OR COALESCE(ls.sentence_mastery, 0) = 0)`;
+        params.push(now);
+      } else {
+        query += ` AND (ls.next_review <= ? OR ls.mastery = 0)`;
+        params.push(now);
+      }
     }
 
     if (mode === 'sentences') {
       query += ` AND w.example_sentence IS NOT NULL AND length(trim(w.example_sentence)) > 0 AND w.example_translation IS NOT NULL AND length(trim(w.example_translation)) > 0`;
+      query += `
+        ORDER BY 
+          CASE WHEN COALESCE(ls.sentence_mastery, 0) = 0 THEN 1 ELSE 0 END,
+          COALESCE(ls.sentence_next_review, ls.next_review) ASC
+        LIMIT ?
+      `;
+    } else {
+      query += `
+        ORDER BY 
+          CASE WHEN ls.mastery = 0 THEN 1 ELSE 0 END, -- Prioritize due reviews over new words
+          ls.next_review ASC
+        LIMIT ?
+      `;
     }
-
-    query += `
-      ORDER BY 
-        CASE WHEN ls.mastery = 0 THEN 1 ELSE 0 END, -- Prioritize due reviews over new words
-        ls.next_review ASC
-      LIMIT ?
-    `;
     params.push(limit);
 
     const rows = db.prepare(query).all(...params) as any[];
@@ -91,7 +112,11 @@ export class StudyService {
         review_count: row.ls_review_count,
         correct_count: row.ls_correct_count,
         wrong_count: row.ls_wrong_count,
-        consecutive_correct: row.ls_consecutive_correct
+        consecutive_correct: row.ls_consecutive_correct,
+        sentence_mastery: row.ls_sentence_mastery ?? 0,
+        sentence_interval_step: row.ls_sentence_interval_step ?? 0,
+        sentence_next_review: row.ls_sentence_next_review ?? row.ls_next_review,
+        sentence_last_reviewed: row.ls_sentence_last_reviewed ?? null,
       },
       folderIds: folderMap.get(row.id) || [],
     }));
@@ -100,7 +125,11 @@ export class StudyService {
   /**
    * Process a review rating for a word.
    */
-  static processReview(wordId: string, rating: ReviewRating): WordWithState {
+  static processReview(
+    wordId: string,
+    rating: ReviewRating,
+    mode: StudyMode = 'words'
+  ): WordWithState {
     const db = getDatabase();
     const now = new Date().toISOString();
 
@@ -118,9 +147,6 @@ export class StudyService {
       ORDER BY reviewed_at ASC
     `).all(wordId) as { rating: ReviewRating, reviewed_at: string }[];
 
-    // Process pure logic
-    const newEngineState = LearningEngine.processReview(state, historyRows, rating, now);
-
     // Prepare counters
     const isCorrect = rating === 'good' || rating === 'easy';
     const newReviewCount = state.review_count + 1;
@@ -128,52 +154,113 @@ export class StudyService {
     const newWrongCount = state.wrong_count + (isCorrect ? 0 : 1);
     const newConsecutive = isCorrect ? state.consecutive_correct + 1 : 0;
 
-    const updateState = db.prepare(`
-      UPDATE learning_states
-      SET 
-        mastery = ?,
-        interval_step = ?,
-        next_review = ?,
-        last_reviewed = ?,
-        review_count = ?,
-        correct_count = ?,
-        wrong_count = ?,
-        consecutive_correct = ?
-      WHERE id = ?
-    `);
-
     const insertHistory = db.prepare(`
       INSERT INTO review_history (id, sync_id, word_id, rating, mastery_before, mastery_after, interval_step_before, interval_step_after, reviewed_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const transaction = db.transaction(() => {
-      updateState.run(
-        newEngineState.mastery,
-        newEngineState.interval_step,
-        newEngineState.next_review,
-        now,
-        newReviewCount,
-        newCorrectCount,
-        newWrongCount,
-        newConsecutive,
-        state.id
-      );
-
-      insertHistory.run(
-        nanoid(),
-        crypto.randomUUID(),
-        wordId,
+    if (mode === 'sentences') {
+      const sentenceState = {
+        ...state,
+        mastery: state.sentence_mastery ?? 0,
+        interval_step: state.sentence_interval_step ?? 0,
+        next_review: state.sentence_next_review || now,
+        last_reviewed: state.sentence_last_reviewed || null,
+      };
+      const newSentenceEngineState = LearningEngine.processReview(
+        sentenceState,
+        historyRows,
         rating,
-        state.mastery,
-        newEngineState.mastery,
-        state.interval_step,
-        newEngineState.interval_step,
         now
       );
-    });
 
-    transaction();
+      const updateSentenceState = db.prepare(`
+        UPDATE learning_states
+        SET 
+          sentence_mastery = ?,
+          sentence_interval_step = ?,
+          sentence_next_review = ?,
+          sentence_last_reviewed = ?,
+          review_count = ?,
+          correct_count = ?,
+          wrong_count = ?,
+          consecutive_correct = ?
+        WHERE id = ?
+      `);
+
+      const transaction = db.transaction(() => {
+        updateSentenceState.run(
+          newSentenceEngineState.mastery,
+          newSentenceEngineState.interval_step,
+          newSentenceEngineState.next_review,
+          now,
+          newReviewCount,
+          newCorrectCount,
+          newWrongCount,
+          newConsecutive,
+          state.id
+        );
+
+        insertHistory.run(
+          nanoid(),
+          crypto.randomUUID(),
+          wordId,
+          rating,
+          sentenceState.mastery,
+          newSentenceEngineState.mastery,
+          sentenceState.interval_step,
+          newSentenceEngineState.interval_step,
+          now
+        );
+      });
+
+      transaction();
+    } else {
+      // Process pure logic for word flashcards
+      const newEngineState = LearningEngine.processReview(state, historyRows, rating, now);
+
+      const updateState = db.prepare(`
+        UPDATE learning_states
+        SET 
+          mastery = ?,
+          interval_step = ?,
+          next_review = ?,
+          last_reviewed = ?,
+          review_count = ?,
+          correct_count = ?,
+          wrong_count = ?,
+          consecutive_correct = ?
+        WHERE id = ?
+      `);
+
+      const transaction = db.transaction(() => {
+        updateState.run(
+          newEngineState.mastery,
+          newEngineState.interval_step,
+          newEngineState.next_review,
+          now,
+          newReviewCount,
+          newCorrectCount,
+          newWrongCount,
+          newConsecutive,
+          state.id
+        );
+
+        insertHistory.run(
+          nanoid(),
+          crypto.randomUUID(),
+          wordId,
+          rating,
+          state.mastery,
+          newEngineState.mastery,
+          state.interval_step,
+          newEngineState.interval_step,
+          now
+        );
+      });
+
+      transaction();
+    }
 
     return WordService.getWordById(wordId)!;
   }

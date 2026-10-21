@@ -129,7 +129,8 @@ export class SyncService {
       SELECT 
         id, word_id, mastery, interval_step, next_review,
         last_reviewed, review_count, correct_count, wrong_count,
-        consecutive_correct
+        consecutive_correct, sentence_mastery, sentence_interval_step,
+        sentence_next_review, sentence_last_reviewed
       FROM learning_states
     `).all() as LearningState[];
 

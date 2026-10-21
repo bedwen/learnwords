@@ -9,14 +9,22 @@ function getOrigin(): string {
   return typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:3001';
 }
 
-export async function getStudyQueue(folderId?: string, mode: StudyMode = 'words'): Promise<WordWithState[]> {
+export async function getStudyQueue(
+  folderId?: string,
+  mode: StudyMode = 'words',
+  practiceAll = false
+): Promise<WordWithState[]> {
   const cacheKey = `study_queue_${folderId || 'all'}_${mode}`;
-  const cached = getCached<WordWithState[]>(cacheKey);
-  if (cached) return cached;
+  if (!practiceAll) {
+    const cached = getCached<WordWithState[]>(cacheKey);
+    if (cached) return cached;
+  }
 
   let queue: WordWithState[];
   if (isMobileApp()) {
-    queue = await localRepository.getStudyQueue(50, folderId, mode);
+    queue = practiceAll
+      ? await localRepository.getStudyQueue(50, folderId, mode, true)
+      : await localRepository.getStudyQueue(50, folderId, mode);
   } else {
     const url = new URL(`${API_BASE}/queue`, getOrigin());
     if (folderId) {
@@ -25,24 +33,37 @@ export async function getStudyQueue(folderId?: string, mode: StudyMode = 'words'
     if (mode) {
       url.searchParams.append('mode', mode);
     }
+    if (practiceAll) {
+      url.searchParams.append('practiceAll', 'true');
+    }
     const res = await fetch(url.toString());
     if (!res.ok) throw new Error('Failed to fetch study queue');
     queue = await res.json();
   }
 
-  setCached(cacheKey, queue);
+  if (!practiceAll) {
+    setCached(cacheKey, queue);
+  }
   return queue;
 }
 
-export async function submitReview(wordId: string, rating: ReviewRating): Promise<WordWithState> {
+export async function submitReview(
+  wordId: string,
+  rating: ReviewRating,
+  mode?: StudyMode
+): Promise<WordWithState> {
   let result: WordWithState;
   if (isMobileApp()) {
-    result = await localRepository.processReview(wordId, rating);
+    result =
+      mode === 'sentences'
+        ? await localRepository.processReview(wordId, rating, 'sentences')
+        : await localRepository.processReview(wordId, rating);
   } else {
+    const payload = mode === 'sentences' ? { wordId, rating, mode } : { wordId, rating };
     const res = await fetch(`${API_BASE}/review`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wordId, rating }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('Failed to submit review');
     result = await res.json();

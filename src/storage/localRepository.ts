@@ -68,11 +68,12 @@ export class LocalRepository {
   async getStudyQueue(
     limitOrFolderId: number | string = 50,
     folderIdOrLimit?: string | number,
-    mode: StudyMode = 'words'
+    mode: StudyMode = 'words',
+    practiceAll = false
   ): Promise<WordWithState[]> {
     let limit = 50;
     let folderId: string | undefined = undefined;
-    let actualMode: StudyMode = mode;
+    const actualMode: StudyMode = mode;
 
     if (typeof limitOrFolderId === 'number') {
       limit = limitOrFolderId;
@@ -130,8 +131,17 @@ export class LocalRepository {
         if (!folderIds.includes(folderId)) continue;
       }
 
-      // Check due condition: next_review <= now OR mastery === 0
-      const isDue = state.next_review <= nowIso || state.mastery === 0;
+      let isDue = true;
+      if (!practiceAll) {
+        if (actualMode === 'sentences') {
+          const sNext = state.sentence_next_review || nowIso;
+          const sMastery = state.sentence_mastery ?? 0;
+          isDue = sNext <= nowIso || sMastery === 0;
+        } else {
+          isDue = state.next_review <= nowIso || state.mastery === 0;
+        }
+      }
+
       if (isDue) {
         candidates.push({
           ...word,
@@ -148,18 +158,29 @@ export class LocalRepository {
           (w.example_sentence?.trim() || '').length > 0 &&
           (w.example_translation?.trim() || '').length > 0
       );
-    }
 
-    // Sort: Due reviews (mastery > 0) first, then new words (mastery === 0)
-    // Within same priority, order by next_review ASC
-    candidates.sort((a, b) => {
-      const aIsNew = a.learning_state.mastery === 0 ? 1 : 0;
-      const bIsNew = b.learning_state.mastery === 0 ? 1 : 0;
-      if (aIsNew !== bIsNew) {
-        return aIsNew - bIsNew;
-      }
-      return a.learning_state.next_review.localeCompare(b.learning_state.next_review);
-    });
+      candidates.sort((a, b) => {
+        const aIsNew = (a.learning_state.sentence_mastery ?? 0) === 0 ? 1 : 0;
+        const bIsNew = (b.learning_state.sentence_mastery ?? 0) === 0 ? 1 : 0;
+        if (aIsNew !== bIsNew) {
+          return aIsNew - bIsNew;
+        }
+        const aNext = a.learning_state.sentence_next_review || a.learning_state.next_review;
+        const bNext = b.learning_state.sentence_next_review || b.learning_state.next_review;
+        return aNext.localeCompare(bNext);
+      });
+    } else {
+      // Sort: Due reviews (mastery > 0) first, then new words (mastery === 0)
+      // Within same priority, order by next_review ASC
+      candidates.sort((a, b) => {
+        const aIsNew = a.learning_state.mastery === 0 ? 1 : 0;
+        const bIsNew = b.learning_state.mastery === 0 ? 1 : 0;
+        if (aIsNew !== bIsNew) {
+          return aIsNew - bIsNew;
+        }
+        return a.learning_state.next_review.localeCompare(b.learning_state.next_review);
+      });
+    }
 
     return candidates.slice(0, limit);
   }
@@ -168,7 +189,11 @@ export class LocalRepository {
    * Deterministically processes a review rating using Universal LearningEngine.
    * Atomically updates learning_states and appends to review_history in IndexedDB.
    */
-  async processReview(wordId: string, rating: ReviewRating): Promise<WordWithState> {
+  async processReview(
+    wordId: string,
+    rating: ReviewRating,
+    mode: StudyMode = 'words'
+  ): Promise<WordWithState> {
     const wordWithState = await this.getWordById(wordId);
     if (!wordWithState) {
       throw new Error(`Word not found: ${wordId}`);
@@ -185,9 +210,6 @@ export class LocalRepository {
     );
     allHistory.sort((a, b) => a.reviewed_at.localeCompare(b.reviewed_at));
 
-    // Pure deterministic calculation
-    const engineResult = LearningEngine.processReview(currentState, allHistory, rating, nowIso);
-
     // Update review counters
     const isCorrect = rating === 'good' || rating === 'easy';
     const newReviewCount = currentState.review_count + 1;
@@ -195,29 +217,70 @@ export class LocalRepository {
     const newWrongCount = currentState.wrong_count + (isCorrect ? 0 : 1);
     const newConsecutive = isCorrect ? currentState.consecutive_correct + 1 : 0;
 
-    const updatedState: LearningState = {
-      ...currentState,
-      mastery: engineResult.mastery,
-      interval_step: engineResult.interval_step,
-      next_review: engineResult.next_review,
-      last_reviewed: nowIso,
-      review_count: newReviewCount,
-      correct_count: newCorrectCount,
-      wrong_count: newWrongCount,
-      consecutive_correct: newConsecutive,
-    };
+    let updatedState: LearningState;
+    let newHistoryRecord: LocalReviewHistoryRecord;
 
-    const newHistoryRecord: LocalReviewHistoryRecord = {
-      id: generateId(),
-      sync_id: generateId(),
-      word_id: wordId,
-      rating,
-      mastery_before: currentState.mastery,
-      mastery_after: engineResult.mastery,
-      interval_step_before: currentState.interval_step,
-      interval_step_after: engineResult.interval_step,
-      reviewed_at: nowIso,
-    };
+    if (mode === 'sentences') {
+      const sentenceState: LearningState = {
+        ...currentState,
+        mastery: currentState.sentence_mastery ?? 0,
+        interval_step: currentState.sentence_interval_step ?? 0,
+        next_review: currentState.sentence_next_review || nowIso,
+        last_reviewed: currentState.sentence_last_reviewed || null,
+      };
+      const engineResult = LearningEngine.processReview(sentenceState, allHistory, rating, nowIso);
+
+      updatedState = {
+        ...currentState,
+        sentence_mastery: engineResult.mastery,
+        sentence_interval_step: engineResult.interval_step,
+        sentence_next_review: engineResult.next_review,
+        sentence_last_reviewed: nowIso,
+        review_count: newReviewCount,
+        correct_count: newCorrectCount,
+        wrong_count: newWrongCount,
+        consecutive_correct: newConsecutive,
+      };
+
+      newHistoryRecord = {
+        id: generateId(),
+        sync_id: generateId(),
+        word_id: wordId,
+        rating,
+        mastery_before: sentenceState.mastery,
+        mastery_after: engineResult.mastery,
+        interval_step_before: sentenceState.interval_step,
+        interval_step_after: engineResult.interval_step,
+        reviewed_at: nowIso,
+      };
+    } else {
+      // Pure deterministic calculation for word flashcards
+      const engineResult = LearningEngine.processReview(currentState, allHistory, rating, nowIso);
+
+      updatedState = {
+        ...currentState,
+        mastery: engineResult.mastery,
+        interval_step: engineResult.interval_step,
+        next_review: engineResult.next_review,
+        last_reviewed: nowIso,
+        review_count: newReviewCount,
+        correct_count: newCorrectCount,
+        wrong_count: newWrongCount,
+        consecutive_correct: newConsecutive,
+      };
+
+      newHistoryRecord = {
+        id: generateId(),
+        sync_id: generateId(),
+        word_id: wordId,
+        rating,
+        mastery_before: currentState.mastery,
+        mastery_after: engineResult.mastery,
+        interval_step_before: currentState.interval_step,
+        interval_step_after: engineResult.interval_step,
+        reviewed_at: nowIso,
+      };
+    }
 
     // Save state and history
     await Promise.all([
@@ -384,6 +447,10 @@ export class LocalRepository {
       correct_count: 0,
       wrong_count: 0,
       consecutive_correct: 0,
+      sentence_mastery: 0,
+      sentence_interval_step: 0,
+      sentence_next_review: nowIso,
+      sentence_last_reviewed: null,
     };
 
     const puts: Promise<any>[] = [
@@ -1432,6 +1499,10 @@ export class LocalRepository {
         correct_count: 0,
         wrong_count: 0,
         consecutive_correct: 0,
+        sentence_mastery: 0,
+        sentence_interval_step: 0,
+        sentence_next_review: now,
+        sentence_last_reviewed: null,
       });
 
       result.imported++;
@@ -1545,6 +1616,10 @@ export class LocalRepository {
       correct_count: 0,
       wrong_count: 0,
       consecutive_correct: 0,
+      sentence_mastery: 0,
+      sentence_interval_step: 0,
+      sentence_next_review: createdAt,
+      sentence_last_reviewed: null,
     };
   }
 }
@@ -1555,10 +1630,11 @@ export const localRepository = new LocalRepository();
 export const getLocalStudyQueue = (
   limitOrFolderId?: number | string,
   folderIdOrLimit?: string | number,
-  mode: StudyMode = 'words'
-) => localRepository.getStudyQueue(limitOrFolderId, folderIdOrLimit, mode);
-export const processLocalReview = (wordId: string, rating: ReviewRating) =>
-  localRepository.processReview(wordId, rating);
+  mode: StudyMode = 'words',
+  practiceAll = false
+) => localRepository.getStudyQueue(limitOrFolderId, folderIdOrLimit, mode, practiceAll);
+export const processLocalReview = (wordId: string, rating: ReviewRating, mode: StudyMode = 'words') =>
+  localRepository.processReview(wordId, rating, mode);
 export const getLocalWords = (params?: Parameters<LocalRepository['getWords']>[0]) =>
   localRepository.getWords(params);
 export const getLocalWordById = (id: string) => localRepository.getWordById(id);

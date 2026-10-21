@@ -382,17 +382,22 @@ export function harmonizeWordLearningState(
 ): LearningState {
   if (reviews.length === 0) {
     if (existingState) return existingState;
+    const defaultTime = word.created_at || new Date().toISOString();
     return {
       id: generateSyncId(),
       word_id: word.id,
       mastery: 0,
       interval_step: 0,
-      next_review: word.created_at || new Date().toISOString(),
+      next_review: defaultTime,
       last_reviewed: null,
       review_count: 0,
       correct_count: 0,
       wrong_count: 0,
       consecutive_correct: 0,
+      sentence_mastery: 0,
+      sentence_interval_step: 0,
+      sentence_next_review: defaultTime,
+      sentence_last_reviewed: null,
     };
   }
 
@@ -410,6 +415,10 @@ export function harmonizeWordLearningState(
     correct_count: 0,
     wrong_count: 0,
     consecutive_correct: 0,
+    sentence_mastery: existingState?.sentence_mastery ?? 0,
+    sentence_interval_step: existingState?.sentence_interval_step ?? 0,
+    sentence_next_review: existingState?.sentence_next_review ?? (word.created_at || sorted[0].reviewed_at),
+    sentence_last_reviewed: existingState?.sentence_last_reviewed ?? null,
   };
 
   const priorHistory: { rating: any; reviewed_at: string }[] = [];

@@ -31,6 +31,10 @@ export interface LearningState {
   correct_count: number;
   wrong_count: number;
   consecutive_correct: number;
+  sentence_mastery?: number;
+  sentence_interval_step?: number;
+  sentence_next_review?: string | null;
+  sentence_last_reviewed?: string | null;
 }
 
 export interface WordWithState extends Word {

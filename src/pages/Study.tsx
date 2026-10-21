@@ -91,26 +91,29 @@ export function Study({ folderId }: StudyProps = {}) {
     setIsRevealed(false);
   };
 
-  const fetchQueue = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getStudyQueue(activeFolderId, currentMode);
-      setQueue(data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load study queue.');
-    } finally {
-      setLoading(false);
-    }
-  }, [activeFolderId, currentMode]);
+  const fetchQueue = useCallback(
+    async (practiceAll = false) => {
+      setLoading(true);
+      try {
+        const data = await getStudyQueue(activeFolderId, currentMode, practiceAll === true);
+        setQueue(data);
+        setError(null);
+      } catch (err) {
+        setError('Failed to load study queue.');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeFolderId, currentMode]
+  );
 
   useEffect(() => {
-    fetchQueue();
+    fetchQueue(false);
   }, [fetchQueue]);
 
   useEffect(() => {
     const handleSynced = () => {
-      fetchQueue();
+      fetchQueue(false);
       getFolders()
         .then((data) => {
           setFolders(data.folders);
@@ -140,7 +143,7 @@ export function Study({ folderId }: StudyProps = {}) {
           });
         });
 
-        await submitReview(currentWord.id, rating);
+        await submitReview(currentWord.id, rating, currentMode);
       } catch (err) {
         console.error('Failed to submit review:', err);
         toast.error('Failed to submit review. Please try again.');
@@ -148,7 +151,7 @@ export function Study({ folderId }: StudyProps = {}) {
         setSubmitting(false);
       }
     },
-    [queue, submitting, toast]
+    [queue, submitting, toast, currentMode]
   );
 
   useEffect(() => {
@@ -230,7 +233,7 @@ export function Study({ folderId }: StudyProps = {}) {
     return (
       <div className="py-24 flex flex-col items-center justify-center text-center space-y-4">
         <p className="text-destructive font-medium">{error}</p>
-        <Button onClick={fetchQueue} variant="outline">
+        <Button onClick={() => fetchQueue(false)} variant="outline">
           Retry
         </Button>
       </div>
@@ -257,22 +260,22 @@ export function Study({ folderId }: StudyProps = {}) {
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 pt-2">
               <Button
                 variant="primary"
+                className="w-full sm:w-auto gap-2"
+                onClick={() => fetchQueue(true)}
+              >
+                <RotateCw className="h-4 w-4" />
+                <span>Practice All Sentences</span>
+              </Button>
+              <Button
+                variant="outline"
                 className="w-full sm:w-auto gap-2"
                 onClick={toggleMode}
               >
                 <BookOpen className="h-4 w-4" />
                 <span>Switch to Word Flashcards</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full sm:w-auto gap-2"
-                onClick={fetchQueue}
-              >
-                <RotateCw className="h-4 w-4" />
-                <span>Check Again</span>
               </Button>
               <Button
                 variant="ghost"
@@ -306,7 +309,15 @@ export function Study({ folderId }: StudyProps = {}) {
             </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 pt-2">
+            <Button
+              variant="primary"
+              className="w-full sm:w-auto gap-2"
+              onClick={() => fetchQueue(true)}
+            >
+              <RotateCw className="h-4 w-4" />
+              <span>Practice All Words</span>
+            </Button>
             <Button
               variant="secondary"
               className="w-full sm:w-auto gap-2"
@@ -314,14 +325,6 @@ export function Study({ folderId }: StudyProps = {}) {
             >
               <span>Home</span>
               <ArrowRight className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full sm:w-auto gap-2"
-              onClick={fetchQueue}
-            >
-              <RotateCw className="h-4 w-4" />
-              <span>Check Again</span>
             </Button>
             <Button
               variant="ghost"
@@ -438,7 +441,7 @@ export function Study({ folderId }: StudyProps = {}) {
             folders={folders}
             onReview={handleRating}
             onSwitchToFlashcards={toggleMode}
-            onRefreshQueue={fetchQueue}
+            onRefreshQueue={() => fetchQueue(false)}
           />
         </div>
       ) : (

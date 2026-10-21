@@ -77,9 +77,9 @@ export function importAllData(db: Database.Database, data: ExportData): void {
 
       // 2. Learning States
       if (learning_states.length > 0) {
-        const insertLs = db.prepare(`INSERT INTO learning_states (id, word_id, mastery, interval_step, next_review, last_reviewed, review_count, correct_count, wrong_count, consecutive_correct) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        const insertLs = db.prepare(`INSERT INTO learning_states (id, word_id, mastery, interval_step, next_review, last_reviewed, review_count, correct_count, wrong_count, consecutive_correct, sentence_mastery, sentence_interval_step, sentence_next_review, sentence_last_reviewed) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
         for (const ls of learning_states) {
-          insertLs.run(ls.id, ls.word_id, ls.mastery, ls.interval_step, ls.next_review, ls.last_reviewed ?? null, ls.review_count, ls.correct_count, ls.wrong_count, ls.consecutive_correct);
+          insertLs.run(ls.id, ls.word_id, ls.mastery, ls.interval_step, ls.next_review, ls.last_reviewed ?? null, ls.review_count, ls.correct_count, ls.wrong_count, ls.consecutive_correct, ls.sentence_mastery ?? 0, ls.sentence_interval_step ?? 0, ls.sentence_next_review ?? ls.next_review, ls.sentence_last_reviewed ?? null);
         }
       }
 
@@ -258,8 +258,8 @@ export function importWordsCsv(db: Database.Database, csvContent: string): CsvIm
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertLs = db.prepare(`
-      INSERT INTO learning_states (id, word_id, mastery, interval_step, next_review, review_count, correct_count, wrong_count, consecutive_correct)
-      VALUES (?, ?, 0, 0, ?, 0, 0, 0, 0)
+      INSERT INTO learning_states (id, word_id, mastery, interval_step, next_review, review_count, correct_count, wrong_count, consecutive_correct, sentence_mastery, sentence_interval_step, sentence_next_review, sentence_last_reviewed)
+      VALUES (?, ?, 0, 0, ?, 0, 0, 0, 0, 0, 0, ?, NULL)
     `);
 
     for (const r of validRows) {
@@ -274,7 +274,7 @@ export function importWordsCsv(db: Database.Database, csvContent: string): CsvIm
       insertWord.run(wordId, syncId, r.word, r.meaning, r.level, r.pos, r.exSen, r.exTrans, r.notes, now, now);
       
       const lsId = nanoid();
-      insertLs.run(lsId, wordId, now);
+      insertLs.run(lsId, wordId, now, now);
 
       result.imported++;
     }

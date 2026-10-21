@@ -234,8 +234,8 @@ export function SentencePracticeView({
           <span className="truncate max-w-[200px]">{getWordFolderLabels(currentWord)}</span>
           <div className="flex items-center gap-1.5 shrink-0">
             <Badge variant={currentWord.level}>{currentWord.level}</Badge>
-            <Badge variant={getStatusLabel(currentWord.learning_state.mastery) as any}>
-              {getStatusLabel(currentWord.learning_state.mastery)}
+            <Badge variant={getStatusLabel(currentWord.learning_state.sentence_mastery ?? currentWord.learning_state.mastery) as any}>
+              {getStatusLabel(currentWord.learning_state.sentence_mastery ?? currentWord.learning_state.mastery)}
             </Badge>
           </div>
         </div>

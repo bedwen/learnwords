@@ -41,7 +41,11 @@ export class WordService {
         ls.review_count as ls_review_count,
         ls.correct_count as ls_correct_count,
         ls.wrong_count as ls_wrong_count,
-        ls.consecutive_correct as ls_consecutive_correct
+        ls.consecutive_correct as ls_consecutive_correct,
+        ls.sentence_mastery as ls_sentence_mastery,
+        ls.sentence_interval_step as ls_sentence_interval_step,
+        ls.sentence_next_review as ls_sentence_next_review,
+        ls.sentence_last_reviewed as ls_sentence_last_reviewed
       FROM words w
       LEFT JOIN learning_states ls ON w.id = ls.word_id
     `;
@@ -117,7 +121,11 @@ export class WordService {
         ls.review_count as ls_review_count,
         ls.correct_count as ls_correct_count,
         ls.wrong_count as ls_wrong_count,
-        ls.consecutive_correct as ls_consecutive_correct
+        ls.consecutive_correct as ls_consecutive_correct,
+        ls.sentence_mastery as ls_sentence_mastery,
+        ls.sentence_interval_step as ls_sentence_interval_step,
+        ls.sentence_next_review as ls_sentence_next_review,
+        ls.sentence_last_reviewed as ls_sentence_last_reviewed
       FROM words w
       LEFT JOIN learning_states ls ON w.id = ls.word_id
       WHERE w.id = ? AND w.deleted_at IS NULL
@@ -148,8 +156,8 @@ export class WordService {
     `);
 
     const insertState = db.prepare(`
-      INSERT INTO learning_states (id, word_id, mastery, interval_step, next_review, review_count, correct_count, wrong_count, consecutive_correct)
-      VALUES (?, ?, 0, 0, ?, 0, 0, 0, 0)
+      INSERT INTO learning_states (id, word_id, mastery, interval_step, next_review, review_count, correct_count, wrong_count, consecutive_correct, sentence_mastery, sentence_interval_step, sentence_next_review, sentence_last_reviewed)
+      VALUES (?, ?, 0, 0, ?, 0, 0, 0, 0, 0, 0, ?, NULL)
     `);
 
     // Execute in a transaction
@@ -167,7 +175,7 @@ export class WordService {
         now,
         now
       );
-      insertState.run(stateId, wordId, now);
+      insertState.run(stateId, wordId, now, now);
 
       // Set folder associations if provided
       if (data.folderIds && data.folderIds.length > 0) {
@@ -273,7 +281,11 @@ export class WordService {
         ls.review_count as ls_review_count,
         ls.correct_count as ls_correct_count,
         ls.wrong_count as ls_wrong_count,
-        ls.consecutive_correct as ls_consecutive_correct
+        ls.consecutive_correct as ls_consecutive_correct,
+        ls.sentence_mastery as ls_sentence_mastery,
+        ls.sentence_interval_step as ls_sentence_interval_step,
+        ls.sentence_next_review as ls_sentence_next_review,
+        ls.sentence_last_reviewed as ls_sentence_last_reviewed
       FROM words w
       LEFT JOIN learning_states ls ON w.id = ls.word_id
       WHERE w.deleted_at IS NOT NULL
@@ -509,7 +521,11 @@ export class WordService {
         review_count: row.ls_review_count,
         correct_count: row.ls_correct_count,
         wrong_count: row.ls_wrong_count,
-        consecutive_correct: row.ls_consecutive_correct
+        consecutive_correct: row.ls_consecutive_correct,
+        sentence_mastery: row.ls_sentence_mastery ?? 0,
+        sentence_interval_step: row.ls_sentence_interval_step ?? 0,
+        sentence_next_review: row.ls_sentence_next_review ?? row.ls_next_review,
+        sentence_last_reviewed: row.ls_sentence_last_reviewed ?? null
       }
     };
   }
