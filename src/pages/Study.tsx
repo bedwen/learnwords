@@ -10,7 +10,7 @@ import {
   ChevronDown,
   Languages,
 } from 'lucide-react';
-import { WordWithState, ReviewRating, Folder, FolderListResponse, StudyMode } from '../types';
+import { WordWithState, ReviewRating, Folder, FolderListResponse, StudyMode, SessionReviewItem } from '../types';
 import { getStudyQueue, submitReview } from '../api/study';
 import { getFolders } from '../api/folders';
 import { getCached, setCached } from '../api/cache';
@@ -19,6 +19,7 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { SentencePracticeView } from '../components/study/SentencePracticeView';
+import { SessionSummary } from '../components/study/SessionSummary';
 
 interface StudyProps {
   folderId?: string;
@@ -29,6 +30,7 @@ export function Study({ folderId }: StudyProps = {}) {
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const [queue, setQueue] = useState<WordWithState[]>([]);
+  const [sessionReviews, setSessionReviews] = useState<SessionReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +80,7 @@ export function Study({ folderId }: StudyProps = {}) {
   const currentMode: StudyMode = searchParams.get('mode') === 'sentences' ? 'sentences' : 'words';
 
   const toggleMode = () => {
+    setSessionReviews([]);
     const nextMode = currentMode === 'words' ? 'sentences' : 'words';
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -94,6 +97,9 @@ export function Study({ folderId }: StudyProps = {}) {
   const fetchQueue = useCallback(
     async (practiceAll = false) => {
       setLoading(true);
+      if (practiceAll) {
+        setSessionReviews([]);
+      }
       try {
         const data = await getStudyQueue(activeFolderId, currentMode, practiceAll === true);
         setQueue(data);
@@ -131,6 +137,10 @@ export function Study({ folderId }: StudyProps = {}) {
 
       setSubmitting(true);
       const currentWord = queue[0];
+      setSessionReviews((prev) => [
+        ...prev,
+        { wordId: currentWord.id, rating, mode: currentMode },
+      ]);
 
       try {
         setIsTransitioning(true);
@@ -207,6 +217,7 @@ export function Study({ folderId }: StudyProps = {}) {
 
   const handleFolderSwitch = (fId: string | undefined) => {
     setActiveFolderId(fId);
+    setSessionReviews([]);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (fId) {
@@ -241,6 +252,20 @@ export function Study({ folderId }: StudyProps = {}) {
   }
 
   if (queue.length === 0) {
+    if (sessionReviews.length > 0) {
+      return (
+        <SessionSummary
+          reviews={sessionReviews}
+          mode={currentMode}
+          folderName={getActiveFolderName()}
+          onPracticeAll={() => fetchQueue(true)}
+          onToggleMode={toggleMode}
+          onNavigateHome={() => navigate('/')}
+          onNavigateWords={() => navigate('/words')}
+        />
+      );
+    }
+
     if (currentMode === 'sentences') {
       return (
         <div className="py-20 flex flex-col items-center justify-center text-center max-w-lg mx-auto">

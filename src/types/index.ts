@@ -219,4 +219,11 @@ export interface CsvImportResult {
   errors: string[];
 }
 
+export interface SessionReviewItem {
+  wordId: string;
+  rating: ReviewRating;
+  mode: StudyMode;
+}
+
+
 
