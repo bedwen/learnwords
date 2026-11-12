@@ -12,6 +12,8 @@
     "build": "tsc -b && vite build",
     "build:mobile": "tsc -b && vite build --mode mobile",
     "android:sync": "npm run build:mobile && npx cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease",
+    "android:apk:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "preview": "vite preview",
     "test": "vitest"
   },
