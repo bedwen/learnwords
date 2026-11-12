@@ -16,3 +16,10 @@ AGENTS.md
 DECISIONS.md
 PROJECT.md
 docs/
+*.jks
+*.keystore
+*.p12
+keystore.properties
+key.properties
+*.apk
+*.aab

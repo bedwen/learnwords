@@ -116,6 +116,25 @@ esac
 
 CLASSPATH="\\\"\\\""
 
+# Auto-detect compatible JDK 21 if JAVA_HOME is unset or points to Java 25+
+need_jdk21=false
+if [ -z "$JAVA_HOME" ]; then
+    need_jdk21=true
+elif [ -x "$JAVA_HOME/bin/java" ]; then
+    case $("$JAVA_HOME/bin/java" -version 2>&1) in
+        *\"2[5-9].*|*\"[3-9][0-9].*) need_jdk21=true ;;
+    esac
+fi
+
+if [ "$need_jdk21" = "true" ]; then
+    for candidate in "$HOME"/.jdks/*21* /usr/lib/jvm/*21*; do
+        if [ -x "$candidate/bin/java" ]; then
+            JAVA_HOME="$candidate"
+            export JAVA_HOME
+            break
+        fi
+    done
+fi
 
 # Determine the Java command to use to start the JVM.
 if [ -n "$JAVA_HOME" ] ; then
