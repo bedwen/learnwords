@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import Database from 'better-sqlite3';
 import {
   LocalRepository,
   generateId,
@@ -12,6 +13,8 @@ import {
 } from '../src/storage/indexedDb';
 import { hydrateLocalDatabase, getLastHydratedAt } from '../src/storage/syncHydrator';
 import { LearningState, Word } from '../src/types';
+import { initializeSchema } from '../server/db/schema';
+import { exportAllData, importAllData } from '../server/services/data';
 
 describe('LocalRepository & Autonomous Client-Side Storage', () => {
   let adapter: IndexedDbAdapter;
@@ -734,6 +737,264 @@ describe('LocalRepository & Autonomous Client-Side Storage', () => {
           } as any,
         })
       ).rejects.toThrow('Missing or invalid tables in data payload');
+    });
+
+    it('restores Desktop SQLite ExportData backups with missing id on word_folders, string timestamps, missing sync_id, and missing sentence_* fields', async () => {
+      const sqliteBackupPayload = {
+        schemaVersion: 1,
+        exportedAt: '2026-10-18T14:30:00.000Z',
+        wordCount: 2,
+        data: {
+          words: [
+            {
+              id: 'word-sqlite-1',
+              // missing sync_id
+              word: 'ephemeral',
+              meaning: 'lasting a short time',
+              level: 'C1',
+              part_of_speech: 'adjective',
+              example_sentence: 'Fashions are ephemeral.',
+              example_translation: 'Modalar gecicidir.',
+              notes: 'Formal usage',
+              created_at: '2026-10-18 10:00:00',
+              updated_at: '2026-10-18 14:30:00', // SQLite string timestamp
+              deleted_at: null,
+            },
+            {
+              id: 'word-sqlite-trash',
+              sync_id: null, // explicit null
+              word: 'obsolete',
+              meaning: 'out of date',
+              level: 'B2',
+              part_of_speech: 'adjective',
+              example_sentence: null,
+              example_translation: null,
+              notes: null,
+              created_at: '2026-10-17 09:00:00',
+              updated_at: '2026-10-18 11:00:00',
+              deleted_at: '2026-10-18 12:00:00', // SQLite string timestamp for soft-deleted word
+            },
+          ],
+          learning_states: [
+            {
+              id: 'ls-sqlite-1',
+              word_id: 'word-sqlite-1',
+              mastery: 2,
+              interval_step: 3,
+              next_review: '2026-10-25 10:00:00',
+              last_reviewed: '2026-10-18 10:00:00',
+              review_count: 3,
+              correct_count: 3,
+              wrong_count: 0,
+              consecutive_correct: 3,
+              // sentence_* fields omitted completely
+            },
+            {
+              id: 'ls-sqlite-trash',
+              word_id: 'word-sqlite-trash',
+              mastery: 0,
+              interval_step: 0,
+              next_review: '2026-10-17 09:00:00',
+              last_reviewed: null,
+              review_count: 0,
+              correct_count: 0,
+              wrong_count: 0,
+              consecutive_correct: 0,
+              // sentence_* fields omitted completely
+            },
+          ],
+          review_history: [
+            {
+              id: 'rh-sqlite-1',
+              // sync_id missing
+              word_id: 'word-sqlite-1',
+              rating: 'good',
+              mastery_before: 1,
+              mastery_after: 2,
+              interval_step_before: 2,
+              interval_step_after: 3,
+              reviewed_at: '2026-10-18 10:00:00',
+            },
+          ],
+          folders: [
+            {
+              id: 'folder-sqlite-1',
+              // sync_id missing
+              name: 'Advanced Vocab',
+              color: null, // should default to '#94a3b8'
+              created_at: '2026-10-18 09:00:00',
+              updated_at: '2026-10-18 09:30:00', // string timestamp
+              deleted_at: null,
+            },
+          ],
+          word_folders: [
+            {
+              // NO 'id' property in SQLite export!
+              word_id: 'word-sqlite-1',
+              folder_id: 'folder-sqlite-1',
+            },
+          ],
+        },
+      };
+
+      await repo.restoreData(sqliteBackupPayload as any);
+
+      // 1. Verify word_folders records in IndexedDB have synthesized id
+      const rawWordFolders = await adapter.getAll<LocalWordFolderRecord>('word_folders');
+      expect(rawWordFolders).toHaveLength(1);
+      expect(rawWordFolders[0].id).toBe('word-sqlite-1_folder-sqlite-1');
+      expect(rawWordFolders[0].word_id).toBe('word-sqlite-1');
+      expect(rawWordFolders[0].folder_id).toBe('folder-sqlite-1');
+
+      // 2. Verify active words and folder associations
+      const words = await repo.getWords();
+      expect(words).toHaveLength(1);
+      expect(words[0].id).toBe('word-sqlite-1');
+      expect(words[0].word).toBe('ephemeral');
+      expect(words[0].folderIds).toEqual(['folder-sqlite-1']);
+      expect(typeof words[0].sync_id).toBe('string');
+      expect(words[0].sync_id.length).toBeGreaterThan(0);
+      expect(typeof words[0].updated_at).toBe('number');
+      expect(words[0].updated_at).toBeGreaterThan(0);
+      expect(words[0].deleted_at).toBeNull();
+
+      // Check learning_states sentence defaults
+      expect(words[0].learning_state.sentence_mastery).toBe(0);
+      expect(words[0].learning_state.sentence_interval_step).toBe(0);
+      expect(words[0].learning_state.sentence_next_review).toBe('2026-10-25 10:00:00');
+      expect(words[0].learning_state.sentence_last_reviewed).toBeNull();
+
+      // 3. Verify folder word counts
+      const folders = await repo.getFolders();
+      expect(folders.folders).toHaveLength(1);
+      expect(folders.folders[0].id).toBe('folder-sqlite-1');
+      expect(folders.folders[0].color).toBe('#94a3b8');
+      expect(folders.folders[0].wordCount).toBe(1);
+      expect(typeof folders.folders[0].sync_id).toBe('string');
+      expect(folders.folders[0].sync_id.length).toBeGreaterThan(0);
+      expect(typeof folders.folders[0].updated_at).toBe('number');
+
+      // 4. Verify review_history has sync_id
+      const reviews = await adapter.getAll<LocalReviewHistoryRecord>('review_history');
+      expect(reviews).toHaveLength(1);
+      expect(typeof reviews[0].sync_id).toBe('string');
+      expect(reviews[0].sync_id.length).toBeGreaterThan(0);
+
+      // 5. Verify soft-deleted word remains in trash with normalized numeric deleted_at
+      const trashWords = await repo.getTrashWords();
+      expect(trashWords).toHaveLength(1);
+      expect(trashWords[0].id).toBe('word-sqlite-trash');
+      expect(typeof trashWords[0].deleted_at).toBe('number');
+      expect(trashWords[0].deleted_at).toBeGreaterThan(0);
+      expect(typeof trashWords[0].sync_id).toBe('string');
+      expect(trashWords[0].sync_id.length).toBeGreaterThan(0);
+      expect(await repo.getTrashCount()).toBe(1);
+    });
+
+    it('performs seamless bidirectional cross-platform round-trip between SQLite and IndexedDB', async () => {
+      // 1. Create a rich dataset in IndexedDB
+      const folder1 = await repo.createFolder('Linguistics', '#6366f1');
+      const folder2 = await repo.createFolder('Science', '#10b981');
+
+      const word1 = await repo.createWord({
+        word: 'paradigm',
+        meaning: 'a typical example or pattern',
+        level: 'C1',
+        part_of_speech: 'noun',
+        example_sentence: 'A paradigm shift occurred.',
+        example_translation: 'Bir paradigma degisimi yasandi.',
+        notes: 'Academic word',
+        folderIds: [folder1.id, folder2.id],
+      });
+
+      const word2 = await repo.createWord({
+        word: 'atom',
+        meaning: 'smallest unit of ordinary matter',
+        level: 'A2',
+        part_of_speech: 'noun',
+        folderIds: [folder2.id],
+      });
+
+      const word3 = await repo.createWord({
+        word: 'ancient',
+        meaning: 'belonging to the very distant past',
+        level: 'B1',
+      });
+      // Soft-delete word3
+      await repo.deleteWord(word3.id);
+
+      // Process reviews
+      await repo.processReview(word1.id, 'good', 'words');
+      await repo.processReview(word1.id, 'easy', 'sentences');
+
+      // 2. Export from Mobile IndexedDB
+      const idbExport = await repo.exportData();
+      expect(idbExport.wordCount).toBe(3);
+      expect(idbExport.data.words).toHaveLength(3);
+      expect(idbExport.data.folders).toHaveLength(2);
+      expect(idbExport.data.word_folders).toHaveLength(3);
+      expect(idbExport.data.review_history).toHaveLength(2);
+
+      // 3. Import into Desktop SQLite (:memory:)
+      const sqliteDb = new Database(':memory:');
+      sqliteDb.pragma('foreign_keys = ON');
+      initializeSchema(sqliteDb);
+
+      try {
+        importAllData(sqliteDb, idbExport);
+
+        // 4. Export from Desktop SQLite
+        const sqliteExport = exportAllData(sqliteDb);
+        expect(sqliteExport.wordCount).toBe(3);
+        // SQLite export word_folders do NOT have an id column:
+        expect(sqliteExport.data.word_folders).toHaveLength(3);
+        for (const wf of sqliteExport.data.word_folders) {
+          expect((wf as any).id).toBeUndefined();
+        }
+
+        // 5. Restore back into a clean IndexedDB repository
+        const cleanAdapter = new IndexedDbAdapter(`test_restore_sqlite_${generateId()}`, 1, createInMemoryIDBFactory());
+        const cleanRepo = new LocalRepository(cleanAdapter);
+        await cleanRepo.restoreData(sqliteExport);
+
+        // 6. Verify full integrity in cleanRepo
+        const activeWords = await cleanRepo.getWords();
+        expect(activeWords).toHaveLength(2);
+
+        const restoredW1 = activeWords.find((w) => w.id === word1.id);
+        expect(restoredW1).toBeDefined();
+        expect(restoredW1!.word).toBe('paradigm');
+        expect(restoredW1!.folderIds).toContain(folder1.id);
+        expect(restoredW1!.folderIds).toContain(folder2.id);
+        expect(restoredW1!.learning_state.review_count).toBe(2);
+        expect(restoredW1!.learning_state.sentence_mastery).toBeGreaterThan(0);
+
+        const restoredW2 = activeWords.find((w) => w.id === word2.id);
+        expect(restoredW2).toBeDefined();
+        expect(restoredW2!.word).toBe('atom');
+        expect(restoredW2!.folderIds).toEqual([folder2.id]);
+
+        const trashWords = await cleanRepo.getTrashWords();
+        expect(trashWords).toHaveLength(1);
+        expect(trashWords[0].id).toBe(word3.id);
+        expect(trashWords[0].word).toBe('ancient');
+        expect(trashWords[0].deleted_at).toBeGreaterThan(0);
+
+        const folders = await cleanRepo.getFolders();
+        expect(folders.folders).toHaveLength(2);
+        const restoredF1 = folders.folders.find((f) => f.id === folder1.id);
+        expect(restoredF1!.wordCount).toBe(1);
+        const restoredF2 = folders.folders.find((f) => f.id === folder2.id);
+        expect(restoredF2!.wordCount).toBe(2);
+
+        const restoredWordFolders = await cleanAdapter.getAll<LocalWordFolderRecord>('word_folders');
+        expect(restoredWordFolders).toHaveLength(3);
+        for (const wf of restoredWordFolders) {
+          expect(wf.id).toBe(`${wf.word_id}_${wf.folder_id}`);
+        }
+      } finally {
+        sqliteDb.close();
+      }
     });
   });
 
