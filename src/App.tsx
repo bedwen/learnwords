@@ -119,8 +119,8 @@ function AppContent() {
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center">
                 <Link to="/" className="flex items-center gap-2 group">
-                  <img src={logo} alt="LearnWords" className="h-8 w-auto dark:hidden transition-transform duration-200 group-hover:scale-102" />
-                  <img src={logoDark} alt="LearnWords" className="h-8 w-auto hidden dark:block transition-transform duration-200 group-hover:scale-102" />
+                  <img src={logo} alt="LearnWords" className="h-8 sm:h-9 w-auto dark:hidden transition-transform duration-200 group-hover:scale-102" />
+                  <img src={logoDark} alt="LearnWords" className="h-8 sm:h-9 w-auto hidden dark:block transition-transform duration-200 group-hover:scale-102" />
                 </Link>
               </div>
 

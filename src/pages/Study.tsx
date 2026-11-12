@@ -471,156 +471,158 @@ export function Study({ folderId }: StudyProps = {}) {
         </div>
       ) : (
         /* The Flashcard */
-        <div className="flex-1 md:flex-initial w-full max-w-[540px] [perspective:1000px] flex flex-col justify-center min-h-0 relative">
-          {queue.length > 2 && (
+        <div className="flex-1 md:flex-initial w-full max-w-[540px] flex flex-col justify-center min-h-0 py-3 md:py-0">
+          <div className="relative w-full flex-1 md:flex-initial h-full max-h-[460px] md:max-h-none min-h-[300px] md:min-h-[420px] [perspective:1000px]">
+            {queue.length > 2 && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-6 -bottom-3 h-6 rounded-3xl bg-card/50 border border-border/50 shadow-2xs transition-all duration-300"
+              />
+            )}
+            {queue.length > 1 && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-3 -bottom-1.5 h-6 rounded-3xl bg-card/80 border border-border/70 shadow-2xs transition-all duration-300"
+              />
+            )}
             <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-6 -bottom-3 h-6 rounded-3xl bg-card/50 border border-border/50 shadow-2xs transition-all duration-300"
-            />
-          )}
-          {queue.length > 1 && (
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-3 -bottom-1.5 h-6 rounded-3xl bg-card/80 border border-border/70 shadow-2xs transition-all duration-300"
-            />
-          )}
-        <div
-          className={`relative w-full [transform-style:preserve-3d] flex-1 md:flex-initial h-full max-h-[460px] md:max-h-none min-h-[300px] md:min-h-[420px] ${
-            isTransitioning ? '' : 'transition-transform duration-500'
-          } ${isRevealed ? '[transform:rotateY(180deg)]' : ''}`}
-        >
-          {/* FRONT FACE */}
-          <div
-            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card rounded-3xl shadow-md border border-border px-4 py-4 sm:px-10 sm:py-8 flex flex-col items-center justify-between text-center cursor-pointer select-none"
-            style={{ pointerEvents: isRevealed ? 'none' : 'auto' }}
-            onClick={() => setIsRevealed(true)}
-          >
-            {/* Header info */}
-            <div className="w-full flex items-center justify-between text-xs text-muted-foreground">
-              <span>{getWordFolderLabels(currentWord)}</span>
-              <div className="flex items-center gap-1.5 opacity-80">
-                <Badge variant={currentWord.level}>{currentWord.level}</Badge>
-                <Badge variant={getStatusLabel(currentWord.learning_state.mastery) as any}>
-                  {getStatusLabel(currentWord.learning_state.mastery)}
-                </Badge>
-              </div>
-            </div>
-
-            {/* English Word */}
-            <div className="flex-1 flex flex-col justify-center items-center w-full py-3 sm:py-6">
-              <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground break-words w-full">
-                {currentWord.word}
-              </h2>
-              {currentWord.part_of_speech && (
-                <span className="text-sm text-muted-foreground font-medium italic mt-2">
-                  ({currentWord.part_of_speech})
-                </span>
-              )}
-            </div>
-
-            {/* Flip Action */}
-            <div className="w-full flex flex-col items-center gap-2 pt-2">
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsRevealed(true);
-                }}
-                className="w-full sm:w-auto rounded-full px-8 py-2.5 font-semibold shadow-xs"
+              className={`relative w-full h-full md:min-h-[420px] [transform-style:preserve-3d] ${
+                isTransitioning ? '' : 'transition-transform duration-500'
+              } ${isRevealed ? '[transform:rotateY(180deg)]' : ''}`}
+            >
+              {/* FRONT FACE */}
+              <div
+                className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(0deg)] bg-card rounded-3xl shadow-md border border-border px-4 py-4 sm:px-10 sm:py-8 flex flex-col items-center justify-between text-center cursor-pointer select-none"
+                style={{ pointerEvents: isRevealed ? 'none' : 'auto' }}
+                onClick={() => setIsRevealed(true)}
               >
-                SHOW ANSWER
-              </Button>
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Keyboard className="h-3 w-3" /> Press <strong className="font-semibold text-foreground">Space</strong> to flip
-              </span>
-            </div>
-          </div>
+                {/* Header info */}
+                <div className="w-full flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{getWordFolderLabels(currentWord)}</span>
+                  <div className="flex items-center gap-1.5 opacity-80">
+                    <Badge variant={currentWord.level}>{currentWord.level}</Badge>
+                    <Badge variant={getStatusLabel(currentWord.learning_state.mastery) as any}>
+                      {getStatusLabel(currentWord.learning_state.mastery)}
+                    </Badge>
+                  </div>
+                </div>
 
-          {/* BACK FACE */}
-          <div
-            className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-3xl shadow-md border border-border px-4 py-3 sm:px-10 sm:py-7 flex flex-col items-center text-center overflow-hidden"
-            style={{ pointerEvents: isRevealed ? 'auto' : 'none' }}
-          >
-            {/* Word Header */}
-            <div className="w-full flex items-center justify-between border-b border-border pb-2 sm:pb-3 mb-2 sm:mb-4 text-xs text-muted-foreground shrink-0">
-              <span className="font-semibold text-foreground text-sm">{currentWord.word}</span>
-              <Badge variant={currentWord.level}>{currentWord.level}</Badge>
-            </div>
-
-            {/* Scrollable details */}
-            <div className="flex-1 w-full min-h-0 overflow-y-auto my-auto pr-1 space-y-2.5 sm:space-y-4 text-center overscroll-contain">
-              <div className="space-y-1">
-                <p className="text-xl sm:text-2xl font-bold text-foreground break-words">
-                  {currentWord.meaning}
-                </p>
-              </div>
-
-              {(currentWord.example_sentence || currentWord.example_translation) && (
-                <div className="p-2.5 sm:p-3.5 rounded-xl bg-secondary/50 border border-border/60 text-left space-y-1 sm:space-y-1.5">
-                  {currentWord.example_sentence && (
-                    <p className="font-serif text-sm sm:text-base text-foreground italic leading-relaxed">
-                      "{currentWord.example_sentence}"
-                    </p>
-                  )}
-                  {currentWord.example_translation && (
-                    <p className="text-2xs sm:text-xs text-muted-foreground">
-                      {currentWord.example_translation}
-                    </p>
+                {/* English Word */}
+                <div className="flex-1 flex flex-col justify-center items-center w-full py-3 sm:py-6">
+                  <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-foreground break-words w-full">
+                    {currentWord.word}
+                  </h2>
+                  {currentWord.part_of_speech && (
+                    <span className="text-sm text-muted-foreground font-medium italic mt-2">
+                      ({currentWord.part_of_speech})
+                    </span>
                   )}
                 </div>
-              )}
 
-              {currentWord.notes && (
-                <div className="p-2 sm:p-2.5 rounded-lg bg-muted/40 text-left">
-                  <p className="text-xs text-muted-foreground">
-                    <strong className="text-foreground">Note:</strong> {currentWord.notes}
-                  </p>
+                {/* Flip Action */}
+                <div className="w-full flex flex-col items-center gap-2 pt-2">
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsRevealed(true);
+                    }}
+                    className="w-full sm:w-auto rounded-full px-8 py-2.5 font-semibold shadow-xs"
+                  >
+                    SHOW ANSWER
+                  </Button>
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Keyboard className="h-3 w-3" /> Press <strong className="font-semibold text-foreground">Space</strong> to flip
+                  </span>
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* SRS Rating Buttons with Keyboard Shortcuts */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 w-full mt-auto pt-2.5 sm:pt-4 border-t border-border shrink-0">
-              <button
-                type="button"
-                onClick={() => handleRating('again')}
-                className="flex flex-col items-center justify-center min-h-[46px] sm:min-h-[52px] py-1.5 sm:py-2 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-again/10 text-recall-again border border-recall-again/25 hover:bg-recall-again/20 active:scale-95 cursor-pointer touch-manipulation"
+              {/* BACK FACE */}
+              <div
+                className="absolute inset-0 [-webkit-backface-visibility:hidden] [backface-visibility:hidden] [transform:rotateY(180deg)] bg-card rounded-3xl shadow-md border border-border px-4 py-3 sm:px-10 sm:py-7 flex flex-col items-center text-center overflow-hidden"
+                style={{ pointerEvents: isRevealed ? 'auto' : 'none' }}
               >
-                <span className="font-bold text-sm">Again</span>
-                <span className="text-2xs opacity-70 mt-0.5 sm:inline">[1]</span>
-              </button>
+                {/* Word Header */}
+                <div className="w-full flex items-center justify-between border-b border-border pb-2 sm:pb-3 mb-2 sm:mb-4 text-xs text-muted-foreground shrink-0">
+                  <span className="font-semibold text-foreground text-sm">{currentWord.word}</span>
+                  <Badge variant={currentWord.level}>{currentWord.level}</Badge>
+                </div>
 
-              <button
-                type="button"
-                onClick={() => handleRating('hard')}
-                className="flex flex-col items-center justify-center min-h-[46px] sm:min-h-[52px] py-1.5 sm:py-2 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-hard/10 text-recall-hard border border-recall-hard/25 hover:bg-recall-hard/20 active:scale-95 cursor-pointer touch-manipulation"
-              >
-                <span className="font-bold text-sm">Hard</span>
-                <span className="text-2xs opacity-70 mt-0.5 sm:inline">[2]</span>
-              </button>
+                {/* Scrollable details */}
+                <div className="flex-1 w-full min-h-0 overflow-y-auto my-auto pr-1 space-y-2.5 sm:space-y-4 text-center overscroll-contain">
+                  <div className="space-y-1">
+                    <p className="text-xl sm:text-2xl font-bold text-foreground break-words">
+                      {currentWord.meaning}
+                    </p>
+                  </div>
 
-              <button
-                type="button"
-                onClick={() => handleRating('good')}
-                className="flex flex-col items-center justify-center min-h-[46px] sm:min-h-[52px] py-1.5 sm:py-2 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-good/12 text-recall-good border border-recall-good/30 hover:bg-recall-good/22 active:scale-95 cursor-pointer touch-manipulation"
-              >
-                <span className="font-bold text-sm">Good</span>
-                <span className="text-2xs opacity-70 mt-0.5 sm:inline">[3]</span>
-              </button>
+                  {(currentWord.example_sentence || currentWord.example_translation) && (
+                    <div className="p-2.5 sm:p-3.5 rounded-xl bg-secondary/50 border border-border/60 text-left space-y-1 sm:space-y-1.5">
+                      {currentWord.example_sentence && (
+                        <p className="font-serif text-sm sm:text-base text-foreground italic leading-relaxed">
+                          "{currentWord.example_sentence}"
+                        </p>
+                      )}
+                      {currentWord.example_translation && (
+                        <p className="text-2xs sm:text-xs text-muted-foreground">
+                          {currentWord.example_translation}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-              <button
-                type="button"
-                onClick={() => handleRating('easy')}
-                className="flex flex-col items-center justify-center min-h-[46px] sm:min-h-[52px] py-1.5 sm:py-2 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-easy/10 text-recall-easy border border-recall-easy/25 hover:bg-recall-easy/20 active:scale-95 cursor-pointer touch-manipulation"
-              >
-                <span className="font-bold text-sm">Easy</span>
-                <span className="text-2xs opacity-70 mt-0.5 sm:inline">[4]</span>
-              </button>
+                  {currentWord.notes && (
+                    <div className="p-2 sm:p-2.5 rounded-lg bg-muted/40 text-left">
+                      <p className="text-xs text-muted-foreground">
+                        <strong className="text-foreground">Note:</strong> {currentWord.notes}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* SRS Rating Buttons with Keyboard Shortcuts */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 w-full mt-auto pt-2.5 sm:pt-4 border-t border-border shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleRating('again')}
+                    className="flex flex-col items-center justify-center min-h-[46px] sm:min-h-[52px] py-1.5 sm:py-2 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-again/10 text-recall-again border border-recall-again/25 hover:bg-recall-again/20 active:scale-95 cursor-pointer touch-manipulation"
+                  >
+                    <span className="font-bold text-sm">Again</span>
+                    <span className="text-2xs opacity-70 mt-0.5 sm:inline">[1]</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRating('hard')}
+                    className="flex flex-col items-center justify-center min-h-[46px] sm:min-h-[52px] py-1.5 sm:py-2 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-hard/10 text-recall-hard border border-recall-hard/25 hover:bg-recall-hard/20 active:scale-95 cursor-pointer touch-manipulation"
+                  >
+                    <span className="font-bold text-sm">Hard</span>
+                    <span className="text-2xs opacity-70 mt-0.5 sm:inline">[2]</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRating('good')}
+                    className="flex flex-col items-center justify-center min-h-[46px] sm:min-h-[52px] py-1.5 sm:py-2 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-good/12 text-recall-good border border-recall-good/30 hover:bg-recall-good/22 active:scale-95 cursor-pointer touch-manipulation"
+                  >
+                    <span className="font-bold text-sm">Good</span>
+                    <span className="text-2xs opacity-70 mt-0.5 sm:inline">[3]</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRating('easy')}
+                    className="flex flex-col items-center justify-center min-h-[46px] sm:min-h-[52px] py-1.5 sm:py-2 px-2 rounded-xl hover:-translate-y-0.5 font-medium text-xs transition-all bg-recall-easy/10 text-recall-easy border border-recall-easy/25 hover:bg-recall-easy/20 active:scale-95 cursor-pointer touch-manipulation"
+                  >
+                    <span className="font-bold text-sm">Easy</span>
+                    <span className="text-2xs opacity-70 mt-0.5 sm:inline">[4]</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
       )}
     </div>
   );
