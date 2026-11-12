@@ -1236,13 +1236,69 @@ export class LocalRepository {
       this.adapter.clear('words'),
     ]);
 
+    const normalizedWords: Word[] = words.map((w: any) => ({
+      ...w,
+      sync_id: w.sync_id || generateId(),
+      part_of_speech: w.part_of_speech ?? null,
+      example_sentence: w.example_sentence ?? null,
+      example_translation: w.example_translation ?? null,
+      notes: w.notes ?? null,
+      updated_at:
+        typeof w.updated_at === 'number'
+          ? w.updated_at
+          : normalizeTimestamp(w.updated_at) || Date.now(),
+      deleted_at: w.deleted_at
+        ? typeof w.deleted_at === 'number'
+          ? w.deleted_at
+          : normalizeTimestamp(w.deleted_at) || null
+        : null,
+    }));
+
+    const normalizedLearningStates: LearningState[] = learning_states.map((ls: any) => ({
+      ...ls,
+      last_reviewed: ls.last_reviewed ?? null,
+      sentence_mastery: ls.sentence_mastery ?? 0,
+      sentence_interval_step: ls.sentence_interval_step ?? 0,
+      sentence_next_review: ls.sentence_next_review ?? ls.next_review,
+      sentence_last_reviewed: ls.sentence_last_reviewed ?? null,
+    }));
+
+    const normalizedReviewHistory: LocalReviewHistoryRecord[] = review_history.map((rh: any) => ({
+      ...rh,
+      sync_id: rh.sync_id || generateId(),
+    }));
+
+    const normalizedFolders: Folder[] = folders.map((f: any) => ({
+      ...f,
+      sync_id: f.sync_id || generateId(),
+      color: f.color ?? '#94a3b8',
+      updated_at:
+        typeof f.updated_at === 'number'
+          ? f.updated_at
+          : normalizeTimestamp(f.updated_at) || Date.now(),
+      deleted_at: f.deleted_at
+        ? typeof f.deleted_at === 'number'
+          ? f.deleted_at
+          : normalizeTimestamp(f.deleted_at) || null
+        : null,
+    }));
+
+    const normalizedWordFolders: LocalWordFolderRecord[] = word_folders
+      .filter((wf: any) => wf && typeof wf.word_id === 'string' && typeof wf.folder_id === 'string')
+      .map((wf: any) => ({
+        ...wf,
+        id: wf.id || `${wf.word_id}_${wf.folder_id}`,
+        word_id: wf.word_id,
+        folder_id: wf.folder_id,
+      }));
+
     // Insert restored data
     await Promise.all([
-      this.adapter.putMany('words', words),
-      this.adapter.putMany('learning_states', learning_states),
-      this.adapter.putMany('review_history', review_history),
-      this.adapter.putMany('folders', folders),
-      this.adapter.putMany('word_folders', word_folders),
+      this.adapter.putMany('words', normalizedWords),
+      this.adapter.putMany('learning_states', normalizedLearningStates),
+      this.adapter.putMany('review_history', normalizedReviewHistory),
+      this.adapter.putMany('folders', normalizedFolders),
+      this.adapter.putMany('word_folders', normalizedWordFolders),
     ]);
   }
 
