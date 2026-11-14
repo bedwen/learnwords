@@ -28,7 +28,10 @@ const LocalFileExport = registerPlugin<LocalFileExportPlugin>('LocalFileExport')
 
 function normalizeMimeType(mimeType: string): string {
   const base = (mimeType || 'application/octet-stream').split(';')[0].trim();
-  return base || 'application/octet-stream';
+  if (!base || !base.includes('/') || base.startsWith('/') || base.endsWith('/')) {
+    return 'application/octet-stream';
+  }
+  return base;
 }
 
 async function readContentAsString(content: string | Blob): Promise<string> {
