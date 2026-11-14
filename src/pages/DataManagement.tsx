@@ -44,6 +44,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../components/ui/Table';
 import { Badge } from '../components/ui/Badge';
 import { useToast } from '../context/ToastContext';
+import { downloadFile } from '../utils/fileDownload';
 
 export function DataManagement() {
   const [error, setError] = useState<string | null>(null);
@@ -190,12 +191,15 @@ export function DataManagement() {
       setError(null);
       setSuccess(null);
       const { blob, filename } = await apiExportSyncBundle();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
+      const result = await downloadFile({
+        content: blob,
+        filename,
+        mimeType: 'application/json',
+      });
+      if (result.cancelled) {
+        toast.info('Export cancelled.');
+        return;
+      }
       const msg = `Sync bundle exported successfully as ${filename}.`;
       setSuccess(msg);
       toast.success(msg);
@@ -258,21 +262,32 @@ export function DataManagement() {
 
   // --- Export JSON ---
   const handleExport = async () => {
+    if (isProcessing) return;
     try {
+      setIsProcessing(true);
       setError(null);
       setSuccess(null);
       const data = await exportData();
 
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `learnwords-backup-${new Date().toISOString().split('T')[0]}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      setSuccess('Database backup exported successfully.');
+      const filename = `learnwords-backup-${new Date().toISOString().split('T')[0]}.json`;
+      const result = await downloadFile({
+        content: JSON.stringify(data, null, 2),
+        filename,
+        mimeType: 'application/json',
+      });
+      if (result.cancelled) {
+        toast.info('Backup export cancelled.');
+        return;
+      }
+      const msg = 'Database backup exported successfully.';
+      setSuccess(msg);
+      toast.success(msg);
     } catch (err: any) {
-      setError(err.message || 'An error occurred during export.');
+      const msg = err.message || 'An error occurred during export.';
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -385,15 +400,22 @@ export function DataManagement() {
 
       const { blob, filename } = await apiExportWordsCsv(selectedFolderId);
 
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-      setSuccess(`Successfully exported words to ${filename}.`);
+      const result = await downloadFile({
+        content: blob,
+        filename,
+        mimeType: 'text/csv;charset=utf-8;',
+      });
+      if (result.cancelled) {
+        toast.info('CSV export cancelled.');
+        return;
+      }
+      const msg = `Successfully exported words to ${filename}.`;
+      setSuccess(msg);
+      toast.success(msg);
     } catch (err: any) {
-      setError(err.message || 'An error occurred during CSV export.');
+      const msg = err.message || 'An error occurred during CSV export.';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsExportingCsv(false);
     }
@@ -731,10 +753,11 @@ export function DataManagement() {
 
                 <Button
                   onClick={handleExport}
+                  disabled={isProcessing}
                   className="w-full gap-2"
                 >
                   <Download className="h-4 w-4" />
-                  <span>Download Backup (JSON)</span>
+                  <span>{isProcessing ? 'Exporting...' : 'Download Backup (JSON)'}</span>
                 </Button>
               </CardContent>
             </Card>
