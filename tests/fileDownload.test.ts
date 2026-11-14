@@ -200,6 +200,131 @@ describe('fileDownload utility', () => {
         })
       ).rejects.toThrow('Permission denied');
     });
+
+    it('safely handles empty or undefined result fields from LocalFileExport.saveFile', async () => {
+      mockSaveFile.mockResolvedValueOnce({});
+
+      const result = await downloadFile({
+        content: 'data',
+        filename: 'data.txt',
+        mimeType: '',
+      });
+
+      expect(mockSaveFile).toHaveBeenCalledWith({
+        filename: 'data.txt',
+        content: 'data',
+        mimeType: 'application/octet-stream',
+      });
+      expect(result).toEqual({
+        saved: false,
+        cancelled: false,
+        uri: undefined,
+      });
+    });
+
+    it('normalizes blank or whitespace-only mimeType to application/octet-stream', async () => {
+      mockSaveFile.mockResolvedValueOnce({
+        saved: true,
+        cancelled: false,
+      });
+
+      await downloadFile({
+        content: 'sample',
+        filename: 'sample.bin',
+        mimeType: '   ;  charset=utf-8',
+      });
+
+      expect(mockSaveFile).toHaveBeenCalledWith({
+        filename: 'sample.bin',
+        content: 'sample',
+        mimeType: 'application/octet-stream',
+      });
+    });
+
+    it('passes multi-byte UTF-8 content and special characters intact to native plugin', async () => {
+      mockSaveFile.mockResolvedValueOnce({
+        saved: true,
+        cancelled: false,
+        uri: 'content://export/utf8',
+      });
+
+      const utf8Content = '{"word":"üniversite — 🌟"}';
+      const result = await downloadFile({
+        content: utf8Content,
+        filename: 'backup.json',
+        mimeType: 'application/json',
+      });
+
+      expect(mockSaveFile).toHaveBeenCalledWith({
+        filename: 'backup.json',
+        content: utf8Content,
+        mimeType: 'application/json',
+      });
+      expect(result.saved).toBe(true);
+      expect(result.uri).toBe('content://export/utf8');
+    });
+
+    it('normalizes invalid MIME types without slash or starting/ending with slash to application/octet-stream', async () => {
+      mockSaveFile.mockResolvedValueOnce({
+        saved: true,
+        cancelled: false,
+      });
+
+      await downloadFile({
+        content: 'test content',
+        filename: 'test.dat',
+        mimeType: 'invalid_mime_no_slash',
+      });
+
+      expect(mockSaveFile).toHaveBeenCalledWith({
+        filename: 'test.dat',
+        content: 'test content',
+        mimeType: 'application/octet-stream',
+      });
+
+      mockSaveFile.mockResolvedValueOnce({
+        saved: true,
+        cancelled: false,
+      });
+
+      await downloadFile({
+        content: 'test content 2',
+        filename: 'test2.dat',
+        mimeType: '/slash_at_start',
+      });
+
+      expect(mockSaveFile).toHaveBeenCalledWith({
+        filename: 'test2.dat',
+        content: 'test content 2',
+        mimeType: 'application/octet-stream',
+      });
+    });
+
+    it('handles multi-megabyte JSON payload without truncation or corruption', async () => {
+      mockSaveFile.mockResolvedValueOnce({
+        saved: true,
+        cancelled: false,
+        uri: 'content://export/large_backup',
+      });
+
+      // Construct a large string ~2MB
+      const baseChunk = '{"id":"word-1","term":"ephemeral","def":"lasting for a very short time"},';
+      const largeContent = '{"words":[' + baseChunk.repeat(25000) + '{"id":"word-end","term":"end","def":"finish"}]}';
+
+      const result = await downloadFile({
+        content: largeContent,
+        filename: 'large_backup.json',
+        mimeType: 'application/json',
+      });
+
+      expect(mockSaveFile).toHaveBeenCalledWith({
+        filename: 'large_backup.json',
+        content: largeContent,
+        mimeType: 'application/json',
+      });
+      expect(result.saved).toBe(true);
+      expect(result.uri).toBe('content://export/large_backup');
+    });
   });
 
   describe('Web / Desktop browser fallback', () => {
